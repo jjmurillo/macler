@@ -1,0 +1,2419 @@
+<!doctype html><html lang="en"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Gradient Descent Trajectory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: the figure plate keeps the thesis proportions (13.5 x 9.7 cm) on the left; a narrow
+   instrument column (readout, top view, convergence, settings) on the right; one column on phones.
+   Second tab: one small synchronised 3D panel per optimiser, then a common map, charts and table.
+   Single light theme on purpose (the author's request): it reads like the printed figure on white paper. */
+:root{
+  --bg:#edf0f3; --plate:#ffffff; --ink:#18212b; --ink-2:#56626f; --rule:#d4dbe2; --chip:#e7ecf1;
+  --accent:#d96c00; --path-edge:#6e3400; --on-accent:#ffffff; --blue:#1f4e79;
+  --contour:#9aafc3; --mesh:#a2a8af; --edge:#5f656c; --box:#80868d;
+  --face:#ffffff; --face-lo:#e0e9f3; --face-hi:#8aa8c8; --floor:#ffffff;
+  --marker-stroke:#4a2400; --star-fill:#ffffff; --good:#2f7d4f; --warn:#a35a00;
+  --f-display:"STIX Two Text","Times New Roman",Georgia,serif;
+  --f-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --r:6px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-ui)}
+.wrap{max-width:1340px;margin:0 auto;padding-inline:clamp(16px,3vw,32px);padding-block:22px 30px;display:grid;gap:16px}
+.head{display:grid;gap:6px}
+.eyebrow{margin:0;font:500 12px/1.3 var(--f-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+h1{margin:0;font:600 clamp(25px,3.1vw,34px)/1.12 var(--f-display);text-wrap:balance}
+.lede{margin:0;max-width:76ch;color:var(--ink-2)}
+.lede b{color:var(--ink);font-weight:500}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--rule);overflow-x:auto}
+.tab{appearance:none;border:0;background:none;padding:10px 14px;margin-bottom:-1px;border-bottom:2px solid transparent;font:500 14px/1.2 var(--f-ui);color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 356px;gap:18px;align-items:start}
+@media (max-width:1080px){.layout{grid-template-columns:minmax(0,1fr)}}
+@media (min-width:1081px){.plate.sticky{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}}
+.plate{background:var(--plate);border:1px solid var(--rule);border-radius:var(--r);padding:12px;display:grid;gap:10px;min-width:0}
+.fig{position:relative;width:100%;aspect-ratio:1.392;overflow:hidden;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.fig.dragging{cursor:grabbing}
+.gl3d,.ov3d{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ov3d{pointer-events:none}
+.labels3d{position:absolute;inset:0;pointer-events:none;font:16px/1 var(--f-display);color:var(--ink)}
+.labels3d.compact{font-size:13px}
+.lbl{position:absolute;left:0;top:0;white-space:nowrap;line-height:1;padding:1px 3px;border-radius:3px}
+.lbl.halo{background:var(--plate);background:color-mix(in srgb,var(--plate) 82%,transparent)}
+.hint{position:absolute;right:8px;top:8px;margin:0;font-size:12px;color:var(--ink-2);background:var(--plate);background:color-mix(in srgb,var(--plate) 88%,transparent);padding:3px 9px;border-radius:999px;pointer-events:none;transition:opacity .5s}
+.hint.gone{opacity:0}
+.fallback{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:24px;text-align:center;color:var(--ink-2)}
+.transport{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding-top:10px;border-top:1px solid var(--rule)}
+.transport.top{padding-top:0;padding-bottom:10px;border-top:0;border-bottom:1px solid var(--rule)}
+.btn{appearance:none;border:1px solid var(--rule);background:var(--plate);color:var(--ink);height:34px;min-width:34px;padding:0 10px;border-radius:var(--r);display:inline-flex;align-items:center;justify-content:center;gap:7px;font:500 13px/1 var(--f-ui);cursor:pointer}
+.btn svg{width:15px;height:15px;fill:currentColor;flex:none}
+.btn:hover{border-color:var(--ink-2)}
+.btn:disabled{opacity:.45;cursor:default;border-color:var(--rule)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);min-width:122px}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.small{height:28px;padding:0 9px;font-size:12px}
+:is(.btn,input,.chip,canvas):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.scrub{flex:1 1 220px;min-width:0;display:flex;align-items:center;gap:10px}
+input[type=range]{accent-color:var(--accent);width:100%;min-width:0}
+.mono,.tout{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+#w0Out .m{font-family:var(--f-display);font-size:16px}
+.tout{font-size:13px;color:var(--ink-2);white-space:nowrap}
+.speed{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+.speed input{width:110px}
+.panel{background:var(--plate);border:1px solid var(--rule);border-radius:var(--r);min-width:0}
+.panel>section{padding:14px 16px;border-top:1px solid var(--rule);display:grid;gap:10px;min-width:0}
+.panel>section:first-child{border-top:0}
+.panel h2{margin:0;font:600 12px/1.3 var(--f-ui);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2)}
+.tline{display:flex;align-items:baseline;gap:10px}
+.tsym{font:italic 26px/1 var(--f-display)}
+.tval{font:500 40px/1 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tof{color:var(--ink-2);font-size:13px}
+.kv{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:baseline}
+.kv dt{font:16px/1.2 var(--f-display);color:var(--ink-2)}
+.kv dd{margin:0;text-align:right;font:14px/1.2 var(--f-mono);font-variant-numeric:tabular-nums}
+.eq{font:17px/1.3 var(--f-display);overflow-x:auto;overflow-y:hidden}
+.eq mjx-container[display="true"]{margin:2px 0 !important}
+.subst{margin:0;font:12.5px/1.6 var(--f-mono);color:var(--ink-2);overflow-wrap:anywhere}
+.subst b{color:var(--ink);font-weight:500}
+.status{margin:0;font-size:13px;line-height:1.45;padding:7px 10px;border-radius:var(--r);border-left:3px solid var(--good);background:var(--chip)}
+.status.warn{border-left-color:var(--warn)}
+.cap{margin:0;font-size:13px;color:var(--ink-2)}
+.cap .m{font-family:var(--f-display);font-size:15px;color:var(--ink)}
+.map{width:100%;aspect-ratio:1;display:block;cursor:crosshair;border-radius:4px}
+.chart{width:100%;height:118px;display:block}
+.charthead{margin:0;font:15px/1.3 var(--f-display);color:var(--ink)}
+.charthead small{font:12px var(--f-ui);color:var(--ink-2)}
+fieldset{border:0;margin:0;padding:0;display:grid;gap:8px;min-width:0}
+legend{padding:0;margin-bottom:6px;font:600 12px/1.3 var(--f-ui);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{position:relative;display:inline-flex}
+.chip input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.chip span{display:inline-flex;align-items:baseline;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid var(--rule);background:var(--plate);font:500 13px/1.2 var(--f-mono);cursor:pointer;color:var(--ink)}
+.chip span em{font:12px var(--f-ui);font-style:normal;color:var(--ink-2)}
+.chip input:checked+span{background:var(--ink);border-color:var(--ink);color:var(--plate)}
+.chip input:checked+span em{color:inherit;opacity:.8}
+.chip input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.note{margin:0;font-size:12.5px;color:var(--ink-2)}
+.checks{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px}
+.checks label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.checks input{accent-color:var(--accent)}
+code{font:13px var(--f-mono);background:var(--chip);padding:3px 7px;border-radius:4px}
+input[type=number]{font:13px var(--f-mono);padding:4px 6px;border:1px solid var(--rule);border-radius:4px;background:var(--plate);color:var(--ink);width:100%;min-width:0}
+/* comparison tab */
+.plate.cmp{gap:12px}
+.cmp-intro{margin:0;font-size:13.5px;color:var(--ink-2);max-width:86ch}
+.cmp-intro b{color:var(--ink);font-weight:500}
+.cmp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:720px){.cmp-grid{grid-template-columns:minmax(0,1fr)}}
+.opt-card{border:1px solid var(--rule);border-top:3px solid var(--c);border-radius:var(--r);padding:8px 10px 7px;display:grid;gap:4px;min-width:0;background:var(--plate)}
+.opt-card header{display:flex;align-items:baseline;justify-content:space-between;gap:4px 10px;flex-wrap:wrap}
+.opt-card h3{margin:0;font:600 16px/1.2 var(--f-display);color:var(--c)}
+.opt-card .hp{font:12px/1.3 var(--f-mono);color:var(--ink-2)}
+.opt-card .cardfoot{margin:0;font:12px/1.4 var(--f-mono);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.opt-card .cardfoot b{color:var(--ink);font-weight:500}
+.opt-card .flag{color:var(--warn)}
+.opt-card .ok{color:var(--good)}
+.cmp-table td.num small{font-size:11px;color:var(--ink-2)}
+/* who gets there first: one row per method, ring = only eta tuned, dot = everything tuned */
+.race{position:relative}
+.race-plot{position:relative;display:grid;gap:2px}
+.race-grid{position:absolute;top:0;bottom:22px;left:82px;right:0;pointer-events:none}
+.race-grid i{position:absolute;top:0;bottom:0;border-left:1px solid var(--rule)}
+.race-grid b{position:absolute;top:0;bottom:0;right:0;background:var(--chip);border-radius:3px}
+.race-row{display:grid;grid-template-columns:74px minmax(0,1fr);gap:8px;align-items:center;min-height:26px}
+.race-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.race-track{position:relative;height:26px}
+.race-line{position:absolute;top:50%;height:2px;margin-top:-1px;background:var(--c);opacity:.4}
+.race-mk{position:absolute;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;cursor:default}
+.race-mk.ring{background:var(--plate);border:2px solid var(--c)}
+.race-mk.dot{background:var(--c);box-shadow:0 0 0 2px var(--plate)}
+.race-mk:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.race-val{position:absolute;top:50%;transform:translateY(-50%);margin-left:7px;padding:1px 3px;border-radius:3px;background:var(--plate);font:11.5px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--ink-2);white-space:nowrap;pointer-events:none}
+.race-val.l{transform:translate(-100%,-50%);margin-left:-7px}
+.cmp-table td.hpc small{font-size:11px}
+.race-val.main{color:var(--ink);font-weight:500}
+.race-axis{display:grid;grid-template-columns:74px minmax(0,1fr);gap:8px}
+.race-ticks{position:relative;height:22px;border-top:1px solid var(--box)}
+.race-ticks span{position:absolute;top:4px;transform:translateX(-50%);font:11px/1.1 var(--f-mono);color:var(--ink-2);white-space:nowrap}
+.race-ticks span.ns{top:3px;font:10.5px/1.05 var(--f-ui);text-align:center}
+.race-tip{position:absolute;z-index:2;max-width:250px;padding:6px 9px;border-radius:var(--r);background:var(--ink);color:var(--plate);font-size:12px;line-height:1.4;pointer-events:none;box-shadow:0 2px 8px rgba(24,33,43,.18)}
+.race-key i.mk{width:11px;height:11px;border-radius:50%;background:var(--ink-2)}
+.race-key i.mk.ring{background:var(--plate);border:2px solid var(--ink-2)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:16px;height:4px;border-radius:2px;background:var(--c)}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+.tablewrap{overflow-x:auto}
+.cmp-table{width:100%;border-collapse:collapse;font-size:13px}
+.cmp-table th{text-align:left;font:600 11px/1.3 var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);padding:6px 8px;border-bottom:1px solid var(--rule);vertical-align:bottom}
+.cmp-table td{padding:7px 8px;border-bottom:1px solid var(--rule);vertical-align:middle}
+.cmp-table td.name{white-space:nowrap;font-weight:500}
+.cmp-table td.name span{display:inline-flex;align-items:center;gap:7px}
+.cmp-table td.rule{font-size:14px}
+.cmp-table td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.cmp-table td.hpc{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);white-space:nowrap}
+.hpgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
+.hpgrid label{display:grid;gap:4px;min-width:0}
+.hpgrid .sym{font:15px/1.2 var(--f-display);color:var(--ink)}
+.etagrid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center;font-size:13px}
+.etagrid span{display:inline-flex;align-items:center;gap:6px}
+.hpgrid small{font:11.5px var(--f-ui);color:var(--ink-2);margin-left:4px}
+.opt-checks label{min-width:9.5em}
+.nt{text-transform:none;letter-spacing:0}
+.foot{margin:0;max-width:110ch;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.foot i{font-family:var(--f-display);font-size:14px}
+mjx-container{color:inherit}
+@media (max-width:520px){.tval{font-size:32px}.speed input{width:90px}}
+@media (prefers-reduced-motion: reduce){.hint{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <p class="eyebrow">IAIAV · Block II.8 Loss Function · Gradient descent</p>
+    <h1>Gradient descent trajectory</h1>
+    <p class="lede">Each step subtracts from the current point the gradient times a <b>fixed</b> learning rate. The orange point moves on the loss surface and its shadow on the parameter plane; the blue arrow is the next step. The second tab compares this method with momentum, Nesterov, RMSProp and Adam.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tabGd" type="button" aria-selected="true" aria-controls="viewGd">Gradient descent</button>
+    <button class="tab" role="tab" id="tabCmp" type="button" aria-selected="false" aria-controls="viewCmp" tabindex="-1">Compare optimizers</button>
+  </nav>
+
+  <main class="layout" id="viewGd" role="tabpanel" aria-labelledby="tabGd">
+    <section class="plate sticky" aria-label="Animated figure">
+      <div class="fig" id="fig">
+        <p class="hint" id="hint">Drag to rotate · Ctrl + wheel to zoom · double click: initial view</p>
+        <p class="fallback" id="loading3d">Loading the 3D view…</p>
+      </div>
+      <div class="transport" role="group" aria-label="Playback">
+        <button class="btn" id="bFirst" type="button" aria-label="Back to t = 0" title="Back to t = 0 (Home)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h2v12H2zM14 2v12L5 8z"/></svg></button>
+        <button class="btn" id="bPrev" type="button" aria-label="Previous step" title="Previous step (←)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 2v12L2 8zM12 2h2v12h-2z"/></svg></button>
+        <button class="btn primary" id="bPlay" type="button" aria-label="Play" title="Play or pause (space)"><svg viewBox="0 0 16 16" aria-hidden="true" id="playIcon"><path d="M4 2v12l10-6z"/></svg><span id="playText">Play</span></button>
+        <button class="btn" id="bNext" type="button" aria-label="Next step" title="Next step (→)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h2v12H2zM6 2v12l8-6z"/></svg></button>
+        <button class="btn" id="bLast" type="button" aria-label="Go to the last step" title="Last step (End)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2v12l9-6zM12 2h2v12h-2z"/></svg></button>
+        <div class="scrub"><input type="range" id="scrub" min="0" max="40" step="1" value="0" aria-label="Iteration t"><output class="tout" id="tOut">t = 0 / 40</output></div>
+        <label class="speed" for="speed">Speed <input type="range" id="speed" min="0.5" max="12" step="0.5" value="2.5"><output class="tout" id="speedOut">2.5 steps/s</output></label>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="State and settings">
+      <section aria-label="Current iterate">
+        <div class="tline"><span class="tsym">t</span><span class="tval" id="rT">0</span><span class="tof" id="rN">of 40 steps</span></div>
+        <dl class="kv">
+          <dt data-tex="w^{(t)}"><i>w</i><sup>(t)</sup></dt><dd id="rW">–</dd>
+          <dt data-tex="J\big(w^{(t)}\big)">J(<i>w</i><sup>(t)</sup>)</dt><dd id="rL">–</dd>
+          <dt data-tex="\big\lVert\nabla_wJ\big(w^{(t)}\big)\big\rVert">‖∇J(<i>w</i><sup>(t)</sup>)‖</dt><dd id="rG">–</dd>
+          <dt data-tex="\big\lVert w^{(t+1)}-w^{(t)}\big\rVert">‖<i>w</i><sup>(t+1)</sup> − <i>w</i><sup>(t)</sup>‖</dt><dd id="rS">–</dd>
+        </dl>
+      </section>
+      <section aria-label="Update rule">
+        <div class="eq" data-tex-display="w^{(t+1)} = w^{(t)} - \alpha\,\nabla_wJ\big(w^{(t)}\big)"><i>w</i><sup>(t+1)</sup> = <i>w</i><sup>(t)</sup> − α ∇J(<i>w</i><sup>(t)</sup>)</div>
+        <p class="subst" id="subst">–</p>
+        <p class="status" id="status" role="status">–</p>
+      </section>
+      <section aria-label="Top view">
+        <h2>Parameter plane, top view</h2>
+        <canvas class="map" id="map" tabindex="0" aria-label="Contour map with the trajectory. Click to choose the starting point."></canvas>
+        <p class="cap">Same scale on <span class="m"><i>w</i><sub>1</sub></span> and <span class="m"><i>w</i><sub>2</sub></span>: here you can see that each step leaves perpendicular to the contour line (dashed line). Click to choose another starting point.</p>
+      </section>
+      <section aria-label="Convergence">
+        <h2>Convergence</h2>
+        <p class="charthead"><span data-tex="J\big(w^{(t)}\big)-J(w^{*})">J(<i>w</i><sup>(t)</sup>) − J(<i>w</i><sup>*</sup>)</span> <small>log scale</small></p>
+        <canvas class="chart" id="chGap" aria-label="Loss gap to the minimum versus iteration"></canvas>
+        <p class="charthead"><span data-tex="\big\lVert w^{(t+1)}-w^{(t)}\big\rVert=\alpha\,\big\lVert\nabla_wJ\big(w^{(t)}\big)\big\rVert">‖<i>w</i><sup>(t+1)</sup> − <i>w</i><sup>(t)</sup>‖ = α‖∇J‖</span> <small>step length</small></p>
+        <canvas class="chart" id="chStep" aria-label="Length of each step versus iteration"></canvas>
+        <p class="cap">With a fixed <span class="m">α</span>, the step only changes because the norm of the gradient changes: it grows on steep regions and shortens near the minimum.</p>
+      </section>
+      <section aria-label="Settings">
+        <fieldset>
+          <legend>Learning rate <span class="nt">α</span></legend>
+          <div class="chips" id="etaChips" role="radiogroup" aria-label="Learning rate"></div>
+          <div class="row"><input type="range" id="etaFine" min="0.005" max="0.35" step="0.005" value="0.05" aria-label="Fine tuning of the learning rate" style="flex:1 1 140px"><output class="tout" id="etaOut">α = 0.050</output></div>
+          <p class="note" id="etaNote">–</p>
+        </fieldset>
+        <fieldset>
+          <legend>Starting point</legend>
+          <div class="row"><output class="mono" id="w0Out">–</output><button class="btn small" id="bW0" type="button">Restore</button></div>
+          <p class="note">Click on the top view to choose another one.</p>
+        </fieldset>
+        <fieldset>
+          <legend>3D view</legend>
+          <div class="chips" id="viewChips" role="radiogroup" aria-label="3D view"></div>
+          <div class="row"><code id="viewOut">view={30}{24}</code><button class="btn small" id="bCopy" type="button">Copy</button></div>
+          <p class="note" id="copyNote">Same convention as <code>view</code> in pgfplots.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Show</legend>
+          <div class="checks">
+            <label><input type="checkbox" id="cMesh" checked> Mesh</label>
+            <label><input type="checkbox" id="cFloor" checked> Projection on the floor</label>
+            <label><input type="checkbox" id="cArrow" checked> Step vector</label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Surface</legend>
+          <div class="chips" role="radiogroup" aria-label="Surface style">
+            <label class="chip"><input type="radio" name="style" value="white" checked><span>White</span></label>
+            <label class="chip"><input type="radio" name="style" value="shaded"><span>Shaded</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Loss function</legend>
+          <div class="chips fnchips" role="radiogroup" aria-label="Loss function"></div>
+        </fieldset>
+      </section>
+    </aside>
+  </main>
+
+  <main class="layout" id="viewCmp" role="tabpanel" aria-labelledby="tabCmp" hidden>
+    <section class="plate cmp" aria-label="One panel per optimizer">
+      <div class="transport top" role="group" aria-label="Comparison playback">
+        <button class="btn" id="cFirst" type="button" aria-label="Back to t = 0" title="Back to t = 0 (Home)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h2v12H2zM14 2v12L5 8z"/></svg></button>
+        <button class="btn" id="cPrev" type="button" aria-label="Previous step" title="Previous step (←)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 2v12L2 8zM12 2h2v12h-2z"/></svg></button>
+        <button class="btn primary" id="cPlay" type="button" aria-label="Play" title="Play or pause (space)"><svg viewBox="0 0 16 16" aria-hidden="true" id="cPlayIcon"><path d="M4 2v12l10-6z"/></svg><span id="cPlayText">Play</span></button>
+        <button class="btn" id="cNext" type="button" aria-label="Next step" title="Next step (→)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h2v12H2zM6 2v12l8-6z"/></svg></button>
+        <button class="btn" id="cLast" type="button" aria-label="Go to the last step" title="Last step (End)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2v12l9-6zM12 2h2v12h-2z"/></svg></button>
+        <div class="scrub"><input type="range" id="cScrub" min="0" max="150" step="1" value="0" aria-label="Iteration t"><output class="tout" id="cTOut">t = 0 / 150</output></div>
+        <label class="speed" for="cSpeed">Speed <input type="range" id="cSpeed" min="0.5" max="20" step="0.5" value="8"><output class="tout" id="cSpeedOut">8.0 steps/s</output></label>
+      </div>
+      <p class="cmp-intro" id="cmpIntro">–</p>
+      <div class="cmp-grid" id="cmpGrid"></div>
+      <div class="tablewrap">
+        <table class="cmp-table" id="cmpTable">
+          <thead><tr><th>Method</th><th>Update rule</th><th>Hyperparameters</th><th>Steps until staying at <span class="nt">J − J* &lt; 10<sup>−6</sup></span></th><th>Distance to <span class="nt"><i>w</i><sup>*</sup></span> at <span class="nt"><i>t</i> = <i>K</i></span></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="note">In all the rules, <span class="m" data-tex="g^{(t)}=\nabla_wJ\big(w^{(t)}\big)">g<sup>(t)</sup> = ∇J(<i>w</i><sup>(t)</sup>)</span>; squares, square roots and divisions are applied component-wise, and ε = 10<sup>−8</sup>. All the accumulators start at zero. “Staying” means remaining below 10<sup>−6</sup> up to step 10&nbsp;000.</p>
+    </section>
+
+    <aside class="panel" aria-label="Comparison and settings">
+      <section aria-labelledby="raceTitle">
+        <h2 id="raceTitle">Who gets there first?</h2>
+        <p class="charthead">Steps until staying at <span data-tex="J-J^{*}<10^{-6}">J − J* &lt; 10<sup>−6</sup></span></p>
+        <div class="race" id="race" role="group" aria-label="Steps until staying at the minimum, per method"></div>
+        <div class="legend race-key" aria-hidden="true"><span><i class="mk ring"></i>Only α tuned</span><span><i class="mk dot"></i>All tuned</span></div>
+        <p class="cap" id="raceCap">–</p>
+      </section>
+      <section aria-label="Overlaid trajectories">
+        <h2>Overlaid trajectories, top view</h2>
+        <canvas class="map" id="cmpMap" tabindex="0" aria-label="Contour map with the trajectories of all the optimizers. Click to choose the common starting point."></canvas>
+        <div class="legend" id="cmpLegend"></div>
+        <p class="cap">Same starting point for all. Click on the map to change it.</p>
+      </section>
+      <section aria-label="Convergence">
+        <h2>Convergence</h2>
+        <p class="charthead"><span data-tex="J\big(w^{(t)}\big)-J(w^{*})">J(<i>w</i><sup>(t)</sup>) − J(<i>w</i><sup>*</sup>)</span> <small>log scale</small></p>
+        <canvas class="chart" id="cmpGap" aria-label="Loss gap to the minimum of each optimizer versus iteration"></canvas>
+        <p class="charthead"><span data-tex="\big\lVert w^{(t+1)}-w^{(t)}\big\rVert">‖<i>w</i><sup>(t+1)</sup> − <i>w</i><sup>(t)</sup>‖</span> <small>step length</small></p>
+        <canvas class="chart" id="cmpStep" aria-label="Step length of each optimizer versus iteration"></canvas>
+        <p class="cap">In gradient descent the step is proportional to the norm of the gradient. In RMSProp and Adam each component is divided by an average of its magnitude, and the step depends mostly on α.</p>
+      </section>
+      <section aria-label="Comparison settings">
+        <fieldset>
+          <legend>Optimizers</legend>
+          <div class="checks opt-checks" id="optChecks"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Tuning of <span class="nt">α</span> and the hyperparameters</legend>
+          <div class="chips" role="radiogroup" aria-label="How α and the hyperparameters are chosen">
+            <label class="chip"><input type="radio" name="preset" value="all" id="presetAll" checked><span>All tuned</span></label>
+            <label class="chip"><input type="radio" name="preset" value="tuned" id="presetTuned"><span>Only α tuned</span></label>
+            <label class="chip"><input type="radio" name="preset" value="same" id="presetSame"><span>Same α</span></label>
+            <label class="chip"><input type="radio" name="preset" value="manual" id="presetManual"><span>Manual</span></label>
+          </div>
+          <label class="row" id="sameRow" hidden><span>Common α</span><input type="number" id="etaSame" min="0.0001" max="1" step="0.005" value="0.05" style="max-width:110px"></label>
+          <div class="etagrid" id="manualGrid" hidden></div>
+          <p class="note" id="presetNote">–</p>
+        </fieldset>
+        <fieldset>
+          <legend>Hyperparameters</legend>
+          <div class="hpgrid">
+            <label for="hpMu"><span class="sym">μ <small>momentum, Nesterov</small></span><input type="number" id="hpMu" min="0" max="0.99" step="0.05" value="0.9"></label>
+            <label for="hpRho"><span class="sym">ρ <small>RMSProp</small></span><input type="number" id="hpRho" min="0.5" max="0.999" step="0.01" value="0.99"></label>
+            <label for="hpB1"><span class="sym">β<sub>1</sub> <small>Adam</small></span><input type="number" id="hpB1" min="0" max="0.999" step="0.05" value="0.9"></label>
+            <label for="hpB2"><span class="sym">β<sub>2</sub> <small>Adam</small></span><input type="number" id="hpB2" min="0.5" max="0.9999" step="0.001" value="0.999"></label>
+            <label for="hpSigma"><span class="sym">σ <small>SGD noise</small></span><input type="number" id="hpSigma" min="0" max="10" step="0.5" value="2"></label>
+            <label for="hpEtaSgd"><span class="sym">α <small>SGD (not tuned)</small></span><input type="number" id="hpEtaSgd" min="0.001" max="0.2" step="0.005" value="0.02"></label>
+          </div>
+          <p class="note" id="hpNote">With “All tuned”, μ, ρ, β<sub>1</sub> and β<sub>2</sub> are chosen on the grid; the values here are only used for the empty circles of “Who gets there first?”.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Horizon <span class="nt">K</span></legend>
+          <div class="chips" id="kChips" role="radiogroup" aria-label="Number of steps"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Loss function</legend>
+          <div class="chips fnchips" role="radiogroup" aria-label="Loss function"></div>
+        </fieldset>
+        <fieldset>
+          <legend>3D view</legend>
+          <div class="chips" id="viewChips2" role="radiogroup" aria-label="3D view"></div>
+        </fieldset>
+      </section>
+    </aside>
+  </main>
+
+  <p class="foot">The iterates are computed in the browser with a fixed α, stopping when ‖<i>w</i><sup>(t+1)</sup> − <i>w</i><sup>(t)</sup>‖ &lt; 10<sup>−4</sup>. The optimizers in the comparison follow the PyTorch update rules (SGD with momentum and Nesterov, RMSprop and Adam), and their trajectories match <code>torch.optim</code> to machine precision; in the comparison there is no stopping rule, but a common horizon of K steps. The example function is adapted from F. Fleuret, <i>The Little Book of Deep Learning</i> (2023), Fig. 3.2, CC BY-NC-SA 4.0. “Curved valley” and “Narrow valley” are original example functions. Keyboard: space plays or pauses, ← → move one step, Home and End jump to the ends.</p>
+</div>
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]] },
+  svg: { fontCache: "global" },
+  startup: {
+    typeset: false,
+    ready() {
+      MathJax.startup.defaultReady();
+      MathJax.startup.promise.then(() => window.dispatchEvent(new Event("mathjax-ready")));
+    },
+  },
+};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+<script>
+/*CORE-BEGIN*/
+(function (root) {
+  "use strict";
+  // Same constant as gd_datos.py and the pgfplots surface.
+  const PI = 3.1415926;
+
+  // Loss of Figure 4.6 (gd_datos.py, LOSS_PGF of cand_A1/B1) and its analytic gradient.
+  function lossFig(x, y) {
+    return y * y + (x - PI) ** 2
+      + 18 * Math.exp(-0.5 * ((x - 5) ** 2 + (y - 1) ** 2))
+      + 12 * Math.exp(-0.5 * ((x - 1.5) ** 2 + (y - 3) ** 2))
+      - 3 * Math.exp(-1.5 * ((x - 3) ** 2 + (y - 1) ** 2));
+  }
+  function gradFig(x, y) {
+    const e1 = 18 * Math.exp(-0.5 * ((x - 5) ** 2 + (y - 1) ** 2));
+    const e2 = 12 * Math.exp(-0.5 * ((x - 1.5) ** 2 + (y - 3) ** 2));
+    const e3 = 3 * Math.exp(-1.5 * ((x - 3) ** 2 + (y - 1) ** 2));
+    return [2 * (x - PI) - (x - 5) * e1 - (x - 1.5) * e2 + 3 * (x - 3) * e3,
+            2 * y - (y - 1) * e1 - (y - 3) * e2 + 3 * (y - 1) * e3];
+  }
+
+  // Original alternative loss (curved valley, fn_2 of cand_B2/A3) and its analytic gradient.
+  function lossValle(x, y) {
+    const u = x + 0.5, v = y + 0.5, r2 = u * u + v * v, A = r2 - 16, q = 0.936 * u - 0.352 * v;
+    return 3.5 * (Math.sqrt(1 + A * A / 16) - 1) + 1.4 * (Math.sqrt(1 + 64 * q * q / r2) - 1);
+  }
+  function gradValle(x, y) {
+    const u = x + 0.5, v = y + 0.5, r2 = u * u + v * v, A = r2 - 16;
+    const S1 = Math.sqrt(1 + A * A / 16);
+    const q = 0.936 * u - 0.352 * v, S2 = Math.sqrt(1 + 64 * q * q / r2);
+    const dgdu = 2 * q * (0.936 * r2 - q * u) / (r2 * r2);
+    const dgdv = 2 * q * (-0.352 * r2 - q * v) / (r2 * r2);
+    return [3.5 * A * u / (8 * S1) + 44.8 * dgdu / S2,
+            3.5 * A * v / (8 * S1) + 44.8 * dgdv / S2];
+  }
+
+  // Ill-conditioned quadratic valley for the optimiser comparison: curvatures 0.12 along the
+  // valley axis (35 degrees) and 6 across it, condition number 50, minimum L* = 0 at (3.6, 2.6).
+  const NV = { cx: 3.6, cy: 2.6, c: Math.cos(35 * Math.PI / 180), s: Math.sin(35 * Math.PI / 180), l1: 0.12, l2: 6 };
+  function lossNarrow(x, y) {
+    const u = NV.c * (x - NV.cx) + NV.s * (y - NV.cy), v = -NV.s * (x - NV.cx) + NV.c * (y - NV.cy);
+    return 0.5 * (NV.l1 * u * u + NV.l2 * v * v);
+  }
+  function gradNarrow(x, y) {
+    const u = NV.c * (x - NV.cx) + NV.s * (y - NV.cy), v = -NV.s * (x - NV.cx) + NV.c * (y - NV.cy);
+    return [NV.l1 * u * NV.c - NV.l2 * v * NV.s, NV.l1 * u * NV.s + NV.l2 * v * NV.c];
+  }
+  // start 2.8 units back along the valley and 1.8 units up its wall
+  const NV_W0 = [NV.cx - 2.8 * NV.c - 1.8 * NV.s, NV.cy - 2.8 * NV.s + 1.8 * NV.c];
+
+  // Layout values follow the sandbox figures: floor level, pgfplots views and ticks.
+  const FUNCS = {
+    fig: {
+      key: "fig", domain: [0, 6], loss: lossFig, grad: gradFig,
+      w0: [1.5, 5.7], eta: 0.05, etas: [0.02, 0.05, 0.10, 0.18], guess: [2.7, 0.6],
+      floor: -25, views: [[30, 24], [21, 20]], zticks: [0, 20, 40], wticks: [1, 3, 5],
+    },
+    valle: {
+      key: "valle", domain: [0, 6], loss: lossValle, grad: gradValle,
+      w0: [5.7, 3.2], eta: 0.05, etas: [0.02, 0.05, 0.10, 0.15], guess: [1, 3],
+      floor: -16, views: [[22, 30]], zticks: [0, 20, 40], wticks: [1, 3, 5],
+    },
+    estrecho: {
+      key: "estrecho", domain: [0, 6], loss: lossNarrow, grad: gradNarrow,
+      w0: [Math.round(NV_W0[0] * 1e4) / 1e4, Math.round(NV_W0[1] * 1e4) / 1e4], eta: 0.2, etas: [0.05, 0.2, 0.32, 0.34],
+      guess: [NV.cx, NV.cy], floor: -20, views: [[60, 35], [260, 30]], zticks: [0, 20, 40, 60], wticks: [1, 3, 5],
+    },
+  };
+
+  // gradient_descent() of gd_datos.py: w <- w - eta*grad; stop once ||w_new - w|| < tol
+  // (the last iterate is kept). Extra guards for the browser: leaving the drawn domain or NaN.
+  function descend(fn, w0, eta, tol, maxIter) {
+    const a = fn.domain[0], b = fn.domain[1];
+    let w = [w0[0], w0[1]];
+    const T = [w.slice()];
+    let status = "max";
+    for (let k = 0; k < maxIter; k++) {
+      const g = fn.grad(w[0], w[1]);
+      const wn = [w[0] - eta * g[0], w[1] - eta * g[1]];
+      if (!Number.isFinite(wn[0]) || !Number.isFinite(wn[1])) { status = "nan"; break; }
+      if (wn[0] < a || wn[0] > b || wn[1] < a || wn[1] > b) { status = "out"; break; }
+      T.push(wn);
+      if (Math.hypot(wn[0] - w[0], wn[1] - w[1]) < tol) { status = "converged"; break; }
+      w = wn;
+    }
+    return { T, status };
+  }
+
+  function hessian(fn, w, h) {
+    h = h || 1e-5;
+    const gxp = fn.grad(w[0] + h, w[1]), gxm = fn.grad(w[0] - h, w[1]);
+    const gyp = fn.grad(w[0], w[1] + h), gym = fn.grad(w[0], w[1] - h);
+    const hxx = (gxp[0] - gxm[0]) / (2 * h), hyx = (gxp[1] - gxm[1]) / (2 * h);
+    const hxy = (gyp[0] - gym[0]) / (2 * h), hyy = (gyp[1] - gym[1]) / (2 * h);
+    const s = 0.5 * (hxy + hyx);
+    return [hxx, s, s, hyy];
+  }
+
+  // Newton iterations from a guess (gd_datos.py uses BFGS from the same point); eigenvalues of H(w*).
+  function minimise(fn, guess) {
+    let w = guess.slice();
+    for (let it = 0; it < 80; it++) {
+      const g = fn.grad(w[0], w[1]), H = hessian(fn, w);
+      const det = H[0] * H[3] - H[1] * H[2];
+      if (!(Math.abs(det) > 1e-14)) break;
+      const dx = (H[3] * g[0] - H[1] * g[1]) / det, dy = (-H[2] * g[0] + H[0] * g[1]) / det;
+      w = [w[0] - dx, w[1] - dy];
+      if (Math.hypot(dx, dy) < 1e-15) break;
+    }
+    const H = hessian(fn, w), tr = H[0] + H[3], det = H[0] * H[3] - H[1] * H[2];
+    const disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+    return { w, L: fn.loss(w[0], w[1]), lam: [tr / 2 - disc, tr / 2 + disc] };
+  }
+
+  function makeField(fn, n) {
+    const a = fn.domain[0], b = fn.domain[1], h = (b - a) / (n - 1), Z = new Float64Array(n * n);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) Z[j * n + i] = fn.loss(a + i * h, a + j * h);
+    return { n, a, b, h, Z };
+  }
+
+  // Marching squares. Corners: a (i,j) bit 1, b (i+1,j) bit 2, c (i+1,j+1) bit 4, d (i,j+1) bit 8.
+  // Edges: 0 bottom a-b, 1 right b-c, 2 top d-c, 3 left a-d. Saddles resolved with the cell mean.
+  function march(field, level, out, keep) {
+    const n = field.n, a = field.a, h = field.h, Z = field.Z;
+    for (let j = 0; j < n - 1; j++) {
+      for (let i = 0; i < n - 1; i++) {
+        const za = Z[j * n + i], zb = Z[j * n + i + 1], zc = Z[(j + 1) * n + i + 1], zd = Z[(j + 1) * n + i];
+        const idx = (za > level ? 1 : 0) | (zb > level ? 2 : 0) | (zc > level ? 4 : 0) | (zd > level ? 8 : 0);
+        if (idx === 0 || idx === 15) continue;
+        const x0 = a + i * h, y0 = a + j * h;
+        const P = (e) => {
+          if (e === 0) return [x0 + h * (level - za) / (zb - za), y0];
+          if (e === 1) return [x0 + h, y0 + h * (level - zb) / (zc - zb)];
+          if (e === 2) return [x0 + h * (level - zd) / (zc - zd), y0 + h];
+          return [x0, y0 + h * (level - za) / (zd - za)];
+        };
+        let pairs;
+        switch (idx) {
+          case 1: case 14: pairs = [[3, 0]]; break;
+          case 2: case 13: pairs = [[0, 1]]; break;
+          case 3: case 12: pairs = [[3, 1]]; break;
+          case 4: case 11: pairs = [[1, 2]]; break;
+          case 6: case 9: pairs = [[0, 2]]; break;
+          case 7: case 8: pairs = [[2, 3]]; break;
+          default: {
+            const centreAbove = 0.25 * (za + zb + zc + zd) > level;
+            pairs = ((idx === 5) === centreAbove) ? [[0, 1], [2, 3]] : [[3, 0], [1, 2]];
+          }
+        }
+        for (const pr of pairs) {
+          const p = P(pr[0]), q = P(pr[1]);
+          if (!keep || keep(p, q)) out.push(p[0], p[1], q[0], q[1]);
+        }
+      }
+    }
+    return out;
+  }
+
+  // Everything that depends only on the loss: Zmin/Zmax on the 601 grid of gd_datos.py, the 15
+  // quadratically spaced contour levels, contour segments (241 grid), w*, L*, Hessian eigenvalues.
+  function prepare(fn) {
+    const big = makeField(fn, 601);
+    let zmin = Infinity, zmax = -Infinity;
+    for (let k = 0; k < big.Z.length; k++) { const z = big.Z[k]; if (z < zmin) zmin = z; if (z > zmax) zmax = z; }
+    const levels = [];
+    for (let i = 1; i <= 15; i++) levels.push(zmin + (zmax - zmin) * (i / 15) ** 2);
+    const field = makeField(fn, 241);
+    const segs = [];
+    for (const L of levels) march(field, L, segs);
+    const opt = minimise(fn, fn.guess);
+    return {
+      zmin, zmax, zmaxBox: Math.ceil(zmax), levels, field, segs,
+      wstar: opt.w, Lstar: opt.L, lam: opt.lam,
+      etaMax: 2 / opt.lam[1], etaOpt: 2 / (opt.lam[0] + opt.lam[1]),
+    };
+  }
+
+  function runInfo(fn, w0, eta, maxIter) {
+    const r = descend(fn, w0, eta, 1e-4, maxIter);
+    const T = r.T, L = [], G = [], gn = [], step = [];
+    for (const p of T) {
+      const g = fn.grad(p[0], p[1]);
+      L.push(fn.loss(p[0], p[1])); G.push(g); gn.push(Math.hypot(g[0], g[1]));
+    }
+    for (let k = 0; k + 1 < T.length; k++) step.push(Math.hypot(T[k + 1][0] - T[k][0], T[k + 1][1] - T[k][1]));
+    return { T, L, G, gn, step, status: r.status, n: T.length - 1, eta, w0: [w0[0], w0[1]] };
+  }
+
+  // ------------------------------------------------------------------ optimisers (comparison)
+  // Update rules as implemented in PyTorch (SGD with momentum and nesterov, RMSprop, Adam), with
+  // g = grad L(w) and element-wise squares, square roots and divisions. All start from zero buffers.
+  const OPTIM = {
+    gd: { name: "Gradient descent", short: "GD", hp: ["eta"] },
+    momentum: { name: "Momentum", short: "Momentum", hp: ["eta", "mu"] },
+    nesterov: { name: "Nesterov", short: "Nesterov", hp: ["eta", "mu"] },
+    rmsprop: { name: "RMSProp", short: "RMSProp", hp: ["eta", "rho"] },
+    adam: { name: "Adam", short: "Adam", hp: ["eta", "b1", "b2"] },
+    sgd: { name: "SGD (simulated noise)", short: "SGD", hp: ["eta", "sigma"] },
+  };
+  const EPS = 1e-8;
+
+  // Seeded Gaussian noise (mulberry32 + polar Box-Muller), so a noisy run is reproducible.
+  function gaussian(seed) {
+    let a = seed >>> 0, spare = null;
+    const uni = () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    return () => {
+      if (spare !== null) { const s = spare; spare = null; return s; }
+      let x, y, r;
+      do { x = 2 * uni() - 1; y = 2 * uni() - 1; r = x * x + y * y; } while (r === 0 || r >= 1);
+      const f = Math.sqrt(-2 * Math.log(r) / r);
+      spare = y * f;
+      return x * f;
+    };
+  }
+
+  // One optimiser as a step function with its own buffers: next(w, k) returns the update for step k
+  // (k = 1, 2, ...) at the iterate w. runOpt and assess share it, so the tuned runs and the displayed
+  // runs follow exactly the same arithmetic.
+  function stepper(fn, kind, hp, seed) {
+    const noise = kind === "sgd" ? gaussian(seed || 1) : null;
+    let b = [0, 0], m = [0, 0], v = [0, 0];
+    return (w, k) => {
+      let g = fn.grad(w[0], w[1]);
+      if (noise) g = [g[0] + hp.sigma * noise(), g[1] + hp.sigma * noise()];
+      if (kind === "momentum" || kind === "nesterov") {
+        b = [hp.mu * b[0] + g[0], hp.mu * b[1] + g[1]];
+        const q = kind === "nesterov" ? [g[0] + hp.mu * b[0], g[1] + hp.mu * b[1]] : b;
+        return [-hp.eta * q[0], -hp.eta * q[1]];
+      }
+      if (kind === "rmsprop") {
+        v = [hp.rho * v[0] + (1 - hp.rho) * g[0] * g[0], hp.rho * v[1] + (1 - hp.rho) * g[1] * g[1]];
+        return [-hp.eta * g[0] / (Math.sqrt(v[0]) + EPS), -hp.eta * g[1] / (Math.sqrt(v[1]) + EPS)];
+      }
+      if (kind === "adam") {
+        m = [hp.b1 * m[0] + (1 - hp.b1) * g[0], hp.b1 * m[1] + (1 - hp.b1) * g[1]];
+        v = [hp.b2 * v[0] + (1 - hp.b2) * g[0] * g[0], hp.b2 * v[1] + (1 - hp.b2) * g[1] * g[1]];
+        const c1 = 1 - Math.pow(hp.b1, k), c2 = 1 - Math.pow(hp.b2, k);
+        return [-hp.eta * (m[0] / c1) / (Math.sqrt(v[0] / c2) + EPS), -hp.eta * (m[1] / c1) / (Math.sqrt(v[1] / c2) + EPS)];
+      }
+      return [-hp.eta * g[0], -hp.eta * g[1]];   // gd and sgd
+    };
+  }
+
+  // Fixed horizon K, no stopping rule (as the learning-rate comparison in gd_datos.py: a rule on
+  // ||dw|| would make the runs not comparable). The run stops early only if it leaves the domain.
+  function runOpt(fn, kind, w0, hp, K, seed) {
+    const lo = fn.domain[0], hi = fn.domain[1], next = stepper(fn, kind, hp, seed);
+    let w = [w0[0], w0[1]];
+    const T = [w.slice()];
+    let status = "horizon";
+    for (let k = 1; k <= K; k++) {
+      const d = next(w, k);
+      const wn = [w[0] + d[0], w[1] + d[1]];
+      if (!Number.isFinite(wn[0]) || !Number.isFinite(wn[1])) { status = "nan"; break; }
+      if (wn[0] < lo || wn[0] > hi || wn[1] < lo || wn[1] > hi) { status = "out"; break; }
+      T.push(wn);
+      w = wn;
+    }
+    const L = T.map((p) => fn.loss(p[0], p[1])), step = [];
+    for (let k = 0; k + 1 < T.length; k++) step.push(Math.hypot(T[k + 1][0] - T[k][0], T[k + 1][1] - T[k][1]));
+    return { kind, T, L, step, status, n: T.length - 1, hp: Object.assign({}, hp) };
+  }
+  function firstBelow(L, Lstar, thr) {
+    for (let k = 0; k < L.length; k++) if (L[k] - Lstar < thr) return k;
+    return -1;
+  }
+  // First step from which L - L* stays below thr until the end of the run (-1 if it is not below at
+  // the end). Methods whose step does not shrink (RMSProp, Adam with a constant eta) can pass below
+  // the threshold and then move away again; first passage would overstate them.
+  function settleTime(L, Lstar, thr) {
+    let k = L.length - 1;
+    if (k < 0 || !(L[k] - Lstar < thr)) return -1;
+    while (k > 0 && L[k - 1] - Lstar < thr) k--;
+    return k;
+  }
+  // Arrival criterion of the comparison. A method "settles" at step t <= K_SHOW if L - L* < THR from
+  // t until K_LONG. The long check matters for RMSProp and Adam: with a constant eta their step does
+  // not shrink, so they can pass below the threshold and move away hundreds of steps later.
+  const THR = 1e-6, K_SHOW = 400, K_LONG = 10000;
+  // Returns the status: "stays", "leaves" (it gets below THR within K_SHOW steps but is above it again
+  // later), "late" (above THR at step K_SHOW, never below before), "out" (leaves the domain) or
+  // "pruned"; the first passage below THR; arrive, the step from which it stays below (for "leaves",
+  // the start of the stretch it is in at step K_SHOW, or the first passage if it is already above
+  // at K_SHOW); leave, the step at which it is above THR again; and L - L* at step K_SHOW for "late".
+  // With beat >= 0 the run stops as soon as it can no longer settle before step beat (for tuning).
+  function assess(fn, kind, w0, hp, Lstar, beat, seed) {
+    const lo = fn.domain[0], hi = fn.domain[1], next = stepper(fn, kind, hp, seed);
+    let w = [w0[0], w0[1]], first = fn.loss(w[0], w[1]) - Lstar < THR ? 0 : -1, lastAbove = first === 0 ? -1 : 0, leave = -1;
+    for (let k = 1; k <= K_LONG; k++) {
+      const d = next(w, k);
+      w = [w[0] + d[0], w[1] + d[1]];
+      if (!(w[0] >= lo && w[0] <= hi && w[1] >= lo && w[1] <= hi)) return { status: "out", step: k, first, arrive: -1, settle: -1, leave: -1 };
+      const gap = fn.loss(w[0], w[1]) - Lstar;
+      if (gap < THR) { if (first < 0) first = k; continue; }
+      if (k > K_SHOW) return { status: "leaves", first, arrive: lastAbove + 1, settle: -1, leave: k };
+      if (first >= 0 && leave < 0) leave = k;
+      lastAbove = k;
+      if (k === K_SHOW) return first >= 0 ? { status: "leaves", first, arrive: first, settle: -1, leave }
+        : { status: "late", first, arrive: -1, settle: -1, leave: -1, gap };
+      if (beat >= 0 && k + 1 >= beat) return { status: "pruned", first, arrive: -1, settle: -1, leave: -1 };
+    }
+    return { status: "stays", first, arrive: lastAbove + 1, settle: lastAbove + 1, leave: -1 };
+  }
+  // Grids: eta in {1, 1.5, 2, 3, 5, 7} x 10^-4 ... 1, and for "all" also the method's own
+  // hyperparameters. mu = 0 is included, so momentum and Nesterov contain gradient descent.
+  const ETA_GRID = [];
+  for (let e = -4; e <= 0; e++) for (const f of [1, 1.5, 2, 3, 5, 7]) if (f * Math.pow(10, e) <= 1) ETA_GRID.push(+(f * Math.pow(10, e)).toPrecision(2));
+  const HP_GRID = { mu: [0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95],
+    rho: [0.5, 0.7, 0.9, 0.95, 0.99, 0.999], b1: [0, 0.5, 0.8, 0.9, 0.95], b2: [0.9, 0.99, 0.999, 0.9999] };
+  function hpGrid(kind, base, all) {
+    if (!all) return [base];
+    if (kind === "momentum" || kind === "nesterov") return HP_GRID.mu.map((mu) => ({ mu }));
+    if (kind === "rmsprop") return HP_GRID.rho.map((rho) => ({ rho }));
+    if (kind === "adam") return HP_GRID.b1.flatMap((b1) => HP_GRID.b2.map((b2) => ({ b1, b2 })));
+    return [base];
+  }
+  // Tuning: eta alone, with the other hyperparameters fixed in base (all = false), or eta together
+  // with them (all = true). The winner is the combination that settles soonest without leaving the
+  // domain. If none settles: the earliest arrival among those that get below THR and move away
+  // later (flagged by their assessment), and failing that the smallest L - L* at step K_SHOW.
+  // Returns { hp, a } with a = assess(...) of the winner.
+  function tune(fn, prep, kind, w0, base, all) {
+    let best = null, fast = null, close = null;
+    for (const h of hpGrid(kind, base, all)) for (const eta of ETA_GRID) {
+      const hp = Object.assign({}, h, { eta }), a = assess(fn, kind, w0, hp, prep.Lstar, best ? best.a.settle : -1);
+      if (a.status === "stays") { if (!best || a.settle < best.a.settle) best = { hp, a }; }
+      else if (a.status === "leaves") { if (!fast || a.arrive < fast.a.arrive) fast = { hp, a }; }
+      else if (a.status === "late") { if (!close || a.gap < close.a.gap) close = { hp, a }; }
+    }
+    return best || fast || close || { hp: Object.assign({}, base, { eta: ETA_GRID[0] }), a: { status: "out", first: -1, arrive: -1, settle: -1, leave: -1 } };
+  }
+
+  root.GDCore = { PI, FUNCS, descend, hessian, minimise, makeField, march, prepare, runInfo,
+    OPTIM, ETA_GRID, HP_GRID, THR, K_SHOW, K_LONG, runOpt, firstBelow, settleTime, assess, tune, gaussian };
+})(typeof window !== "undefined" ? window : globalThis);
+/*CORE-END*/
+</script>
+<script>
+(function () {
+  "use strict";
+  const C = window.GDCore;
+  const $ = (id) => document.getElementById(id);
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const MINUS = "−";
+  const SUP = { "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹", "-": "⁻", "+": "⁺", "(": "⁽", ")": "⁾" };
+  const sup = (s) => String(s).split("").map((c) => SUP[c] || c).join("");
+  const fx = (x, d) => (x < 0 ? MINUS : "") + Math.abs(x).toFixed(d);
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  const smooth = (u) => u * u * (3 - 2 * u);
+  const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+  const fmtEta = (e) => { let s = e.toFixed(4).replace(/0+$/, ""); if (/\.\d$/.test(s)) s += "0"; if (s.endsWith(".")) s += "00"; return s; };
+  function sci(x, sig) {
+    sig = sig || 3;
+    if (!Number.isFinite(x)) return "–";
+    if (x === 0) return "0";
+    const ax = Math.abs(x), sign = x < 0 ? MINUS : "";
+    let e = Math.floor(Math.log10(ax));
+    if (e >= -3 && e < 4) return fx(x, Math.max(0, sig - 1 - e));
+    let ms = (ax / Math.pow(10, e)).toFixed(sig - 1);
+    if (Number(ms) >= 10) { e += 1; ms = (ax / Math.pow(10, e)).toFixed(sig - 1); }
+    return sign + ms + "·10" + sup(e);
+  }
+  const FN_LABELS = { fig: ["Example function", "Fleuret"], valle: ["Curved valley", ""], estrecho: ["Narrow valley", "κ = 50"] };
+
+  // Shared settings (function, start point, 3D view, display) and the state of the first tab.
+  const S = {
+    tab: "gd", fnKey: "fig", fn: null, prep: null, w0: null,
+    h: 30, v: 24, zoom: 1, style: "white", showMesh: true, showFloor: true, showArrow: true, themeVersion: 0,
+    eta: 0.05, run: null, runId: 0, p: 0, playing: false, speed: 2.5, holdUntil: 0, acc: 0,
+    W: 0, H: 0, dirty: true, lvKey: "", lvSegs: [],
+  };
+  const PREP = {};
+  const listeners = {};
+  const APP = (window.APP = {
+    S, C, theme: {}, reduceMotion,
+    util: { sup, fx, clamp, smooth, easeInOut, fmtEta, sci, MINUS },
+    on(kind, fn) { (listeners[kind] = listeners[kind] || []).push(fn); },
+    emit(kind) { for (const fn of listeners[kind] || []) fn(); },
+    prepOf, typeset, markDirty, viewChanged, setFunction, setW0, resetView, hideHint,
+    frameAt, setupCanvas, drawMapBase, drawLogChart, levelPiece, buildViewChips,
+  });
+
+  function markDirty() { S.dirty = true; }
+  function prepOf(key) { return PREP[key] || (PREP[key] = C.prepare(C.FUNCS[key])); }
+
+  // ---------------------------------------------------------------- theme
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement), g = (n) => cs.getPropertyValue(n).trim();
+    APP.theme = {
+      plate: g("--plate"), ink: g("--ink"), ink2: g("--ink-2"), rule: g("--rule"), chip: g("--chip"),
+      accent: g("--accent"), pathEdge: g("--path-edge"), blue: g("--blue"), contour: g("--contour"), mesh: g("--mesh"),
+      edge: g("--edge"), box: g("--box"), face: g("--face"), faceLo: g("--face-lo"), faceHi: g("--face-hi"),
+      floor: g("--floor"), stroke: g("--marker-stroke"), starFill: g("--star-fill"), warn: g("--warn"),
+    };
+    S.themeVersion++; S.dirty = true;
+  }
+
+  // ---------------------------------------------------------------- shared settings
+  function setFunction(key) {
+    S.fnKey = key; S.fn = C.FUNCS[key]; S.prep = prepOf(key);
+    S.eta = S.fn.eta; S.w0 = S.fn.w0.slice();
+    S.h = S.fn.views[0][0]; S.v = S.fn.views[0][1]; S.zoom = 1;
+    document.querySelectorAll(".fnchips input").forEach((r) => { r.checked = r.value === key; });
+    buildEtaChips(); buildViewChips();
+    recompute(S.tab === "gd");
+    APP.emit("fn");
+  }
+  function setW0(w) {
+    S.w0 = [w[0], w[1]];
+    recompute(S.tab === "gd");
+    APP.emit("w0");
+  }
+  function viewChanged() { S.dirty = true; syncViewUI(); APP.emit("view"); }
+  function resetView() { S.h = S.fn.views[0][0]; S.v = S.fn.views[0][1]; S.zoom = 1; viewChanged(); }
+
+  // ---------------------------------------------------------------- first tab: run and playback
+  function recompute(autoplay) {
+    const P = S.prep, maxIter = S.eta > P.etaMax ? 100 : 400;
+    S.run = C.runInfo(S.fn, S.w0, S.eta, maxIter);
+    S.runId++; S.acc = 0;
+    $("scrub").max = String(S.run.n);
+    if (reduceMotion) { S.p = S.run.n; setPlaying(false); }
+    else { S.p = 0; setPlaying(Boolean(autoplay)); S.holdUntil = performance.now() + 700; }
+    updateStatus(); syncEtaUI(); syncW0UI();
+    lastReadKey = ""; S.dirty = true;
+  }
+  function setPlaying(on) {
+    if (on && S.run && S.p >= S.run.n) S.p = 0;
+    S.playing = on;
+    $("playText").textContent = on ? "Pause" : "Play";
+    $("bPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+    $("playIcon").innerHTML = on ? '<path d="M4 2h3v12H4zM9 2h3v12H9z"/>' : '<path d="M4 2v12l10-6z"/>';
+    S.dirty = true;
+  }
+  function advance(dt) {
+    const n = S.run.n;
+    if (reduceMotion) {
+      S.acc += dt * S.speed;
+      while (S.acc >= 1 && S.p < n) { S.p = Math.floor(S.p) + 1; S.acc -= 1; }
+    } else {
+      S.p = Math.min(n, S.p + dt * S.speed);
+    }
+    if (S.p >= n) { S.p = n; setPlaying(false); }
+    S.dirty = true;
+  }
+  // Position inside a step: a short pause shows the step vector, then the point moves along the
+  // straight segment to the next iterate. Shared by both tabs.
+  function frameAt(T, L, p, playing) {
+    const n = T.length - 1, t = Math.min(n, Math.floor(p + 1e-9));
+    let f = t < n ? p - t : 0;
+    if (reduceMotion) f = 0;
+    const DW = 0.32;
+    let arrowK = 0, m = 0;
+    if (t < n) {
+      if (!playing && f < 1e-6) arrowK = 1;
+      else { arrowK = smooth(Math.min(1, f / DW)); m = f > DW ? easeInOut((f - DW) / (1 - DW)) : 0; }
+    }
+    const A = T[t], N = t < n ? T[t + 1] : A;
+    const cur = [A[0] + (N[0] - A[0]) * m, A[1] + (N[1] - A[1]) * m];
+    const curL = t < n ? L[t] + (L[t + 1] - L[t]) * m : L[t];
+    return { t, n, m, arrowK, cur, curL };
+  }
+  function frameInfo() { return frameAt(S.run.T, S.run.L, S.p, S.playing); }
+  function goTo(p) { setPlaying(false); S.p = clamp(p, 0, S.run.n); S.dirty = true; }
+  function stepBack() { const t = Math.floor(S.p + 1e-9); goTo(S.p - t > 1e-6 ? t : t - 1); }
+  function stepFwd() { goTo(Math.floor(S.p + 1e-9) + 1); }
+
+  // ---------------------------------------------------------------- first tab: readouts
+  let lastReadKey = "";
+  function updateReadouts(fi) {
+    const R = S.run, t = fi.t, key = S.runId + ":" + t;
+    if (key === lastReadKey) return;
+    lastReadKey = key;
+    $("rT").textContent = String(t);
+    $("rN").textContent = "of " + R.n + (R.n === 1 ? " step" : " steps");
+    const w = R.T[t];
+    $("rW").textContent = "(" + fx(w[0], 4) + ", " + fx(w[1], 4) + ")";
+    $("rL").textContent = fx(R.L[t], 5);
+    $("rG").textContent = sci(R.gn[t], 4);
+    $("rS").textContent = t < R.n ? sci(R.step[t], 4) : "–";
+    $("tOut").textContent = "t = " + t + " / " + R.n;
+    $("scrub").value = String(t);
+    const sub = $("subst");
+    if (t < R.n) {
+      const g = R.G[t], wn = R.T[t + 1];
+      sub.innerHTML = "∇J(w" + sup("(" + t + ")") + ") = (" + fx(g[0], 4) + ", " + fx(g[1], 4) + ")<br>"
+        + "<b>w" + sup("(" + (t + 1) + ")") + "</b> = (" + fx(w[0], 4) + ", " + fx(w[1], 4) + ") " + MINUS + " "
+        + fmtEta(R.eta) + " · ∇J = <b>(" + fx(wn[0], 4) + ", " + fx(wn[1], 4) + ")</b>";
+    } else {
+      sub.innerHTML = "Last iterate: <b>w" + sup("(" + t + ")") + " = (" + fx(w[0], 4) + ", " + fx(w[1], 4) + ")</b>";
+    }
+  }
+  function updateStatus() {
+    const R = S.run, P = S.prep, n = R.n, el = $("status");
+    const ws = "<i>w</i><sup>*</sup>";
+    let html, warn = false;
+    if (R.status === "converged") {
+      const last = R.T[n], dist = Math.hypot(last[0] - P.wstar[0], last[1] - P.wstar[1]);
+      html = "Converges in " + n + (n === 1 ? " step" : " steps") + ": the last step is " + sci(R.step[n - 1], 2)
+        + " &lt; 10" + sup("-4") + ". Final distance to " + ws + ": " + sci(dist, 2) + ".";
+    } else if (R.status === "out") {
+      warn = true;
+      html = "Step " + (n + 1) + " would leave the plotted domain [" + S.fn.domain[0] + ", " + S.fn.domain[1] + "]²; the animation stops at t = " + n + ".";
+    } else if (R.status === "nan") {
+      warn = true;
+      html = "The iteration stops being numerically valid at step " + (n + 1) + ".";
+    } else if (R.eta > P.etaMax) {
+      warn = true;
+      html = "It does not converge: α = " + fmtEta(R.eta) + " exceeds 2/λ<sub>max</sub> = " + P.etaMax.toFixed(3)
+        + ". Near " + ws + " the iteration bounces from one side of the valley to the other; " + n + " steps are shown.";
+    } else {
+      warn = true;
+      html = "After " + n + " steps the last step is still " + sci(R.step[n - 1], 2) + ", above 10" + sup("-4") + ".";
+    }
+    el.innerHTML = html;
+    el.classList.toggle("warn", warn);
+  }
+
+  // ---------------------------------------------------------------- settings UI
+  function buildFnChips() {
+    document.querySelectorAll(".fnchips").forEach((box, gi) => {
+      box.textContent = "";
+      for (const key of Object.keys(C.FUNCS)) {
+        const [name, tag] = FN_LABELS[key] || [key, ""];
+        const lab = document.createElement("label");
+        lab.className = "chip";
+        lab.innerHTML = '<input type="radio" name="fn' + gi + '" value="' + key + '"><span>' + name + (tag ? " <em>" + tag + "</em>" : "") + "</span>";
+        lab.querySelector("input").addEventListener("change", () => setFunction(key));
+        box.appendChild(lab);
+      }
+    });
+  }
+  function buildEtaChips() {
+    const box = $("etaChips"), fn = S.fn, P = S.prep;
+    box.textContent = "";
+    for (const e of fn.etas) {
+      let tag = "";
+      if (e === fn.eta) tag = "default";
+      else if (e > P.etaMax) tag = "&gt; 2/λ<sub>max</sub>";
+      else if (Math.abs(e - P.etaOpt) < 0.01) tag = "≈ optimal";
+      else if (e < fn.eta) tag = "small";
+      const lab = document.createElement("label");
+      lab.className = "chip";
+      lab.innerHTML = '<input type="radio" name="eta" value="' + e + '"><span>' + fmtEta(e) + (tag ? " <em>" + tag + "</em>" : "") + "</span>";
+      lab.querySelector("input").addEventListener("change", () => setEta(e));
+      box.appendChild(lab);
+    }
+    $("etaNote").innerHTML = "Local stability at <i>w</i><sup>*</sup>: α &lt; 2/λ<sub>max</sub> = " + P.etaMax.toFixed(3)
+      + ". The contraction is fastest with α = 2/(λ<sub>min</sub> + λ<sub>max</sub>) = " + P.etaOpt.toFixed(3)
+      + " (λ = " + P.lam[0].toFixed(2) + ", " + P.lam[1].toFixed(2) + ").";
+  }
+  function setEta(e) { S.eta = e; recompute(true); }
+  function syncEtaUI() {
+    document.querySelectorAll('input[name="eta"]').forEach((r) => { r.checked = Math.abs(Number(r.value) - S.eta) < 1e-9; });
+    $("etaFine").value = String(S.eta);
+    $("etaOut").textContent = "α = " + S.eta.toFixed(3);
+  }
+  function syncW0UI() {
+    $("w0Out").innerHTML = '<span class="m"><i>w</i><sup>(0)</sup></span> = (' + fx(S.w0[0], 2) + ", " + fx(S.w0[1], 2) + ")";
+    $("bW0").disabled = Math.abs(S.w0[0] - S.fn.w0[0]) < 1e-9 && Math.abs(S.w0[1] - S.fn.w0[1]) < 1e-9;
+  }
+  function buildViewChips() {
+    const tags = [];
+    for (const [id, name] of [["viewChips", "view"], ["viewChips2", "view2"]]) {
+      const box = $(id);
+      if (!box) continue;
+      box.textContent = "";
+      S.fn.views.forEach((vw, i) => {
+        const lab = document.createElement("label");
+        lab.className = "chip";
+        lab.innerHTML = '<input type="radio" name="' + name + '" value="' + i + '"><span>{' + vw[0] + "}{" + vw[1] + "}" + (tags[i] ? " <em>" + tags[i] + "</em>" : "") + "</span>";
+        lab.querySelector("input").addEventListener("change", () => { S.h = vw[0]; S.v = vw[1]; S.zoom = 1; viewChanged(); });
+        box.appendChild(lab);
+      });
+    }
+    syncViewUI();
+  }
+  function normAz(h) { let a = ((h % 360) + 360) % 360; if (a > 180) a -= 360; return a; }
+  function syncViewUI() {
+    const h = Math.round(normAz(S.h)), v = Math.round(S.v);
+    $("viewOut").textContent = "view={" + h + "}{" + v + "}";
+    document.querySelectorAll('input[name="view"],input[name="view2"]').forEach((r) => {
+      const vw = S.fn.views[Number(r.value)];
+      r.checked = Boolean(vw) && vw[0] === h && vw[1] === v;
+    });
+  }
+
+  // ---------------------------------------------------------------- 2D drawings (shared helpers)
+  function setupCanvas(cv) {
+    const r = cv.getBoundingClientRect(), w = Math.round(r.width), h = Math.round(r.height);
+    if (w < 20 || h < 20) return null;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+  }
+  // Equal-scale map of the domain with the level curves; returns the coordinate transform.
+  // The caller draws inside the clipped plot area, then calls finish() for frame, ticks and labels.
+  function drawMapBase(cv, fn, P) {
+    const c = setupCanvas(cv);
+    if (!c) return null;
+    const { ctx, w, h } = c, th = APP.theme, a = fn.domain[0], span = fn.domain[1] - a;
+    const ml = 34, mr = 8, mt = 8, mb = 36, size = Math.max(10, Math.min(w - ml - mr, h - mt - mb));
+    const ox = ml + Math.max(0, (w - ml - mr - size) / 2), oy = mt;
+    const X = (x) => ox + ((x - a) / span) * size, Y = (y) => oy + size - ((y - a) / span) * size;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = th.floor;
+    ctx.fillRect(ox, oy, size, size);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ox, oy, size, size); ctx.clip();
+    ctx.strokeStyle = th.contour; ctx.lineWidth = 1; ctx.beginPath();
+    const sg = P.segs;
+    for (let i = 0; i < sg.length; i += 4) { ctx.moveTo(X(sg[i]), Y(sg[i + 1])); ctx.lineTo(X(sg[i + 2]), Y(sg[i + 3])); }
+    ctx.stroke();
+    const finish = () => {
+      ctx.restore();
+      ctx.strokeStyle = th.box; ctx.lineWidth = 1;
+      ctx.strokeRect(ox + 0.5, oy + 0.5, size - 1, size - 1);
+      ctx.fillStyle = th.ink2; ctx.font = '11px "IBM Plex Mono", ui-monospace, monospace';
+      for (let k = Math.ceil(a); k <= fn.domain[1]; k++) {
+        const x = Math.round(X(k)) + 0.5, y = Math.round(Y(k)) + 0.5;
+        ctx.beginPath(); ctx.moveTo(x, oy + size); ctx.lineTo(x, oy + size + 4); ctx.moveTo(ox, y); ctx.lineTo(ox - 4, y); ctx.stroke();
+        ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(String(k), x, oy + size + 6);
+        ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(String(k), ox - 7, y);
+      }
+      ctx.fillStyle = th.ink; ctx.font = 'italic 15px "STIX Two Text", "Times New Roman", serif';
+      ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.fillText("w₁", ox + size / 2, oy + size + 33);
+      ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText("w₂", 2, oy + size / 2);
+    };
+    const line = (pts) => { ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])))); ctx.stroke(); };
+    const dot = (x, y, r, fill, stroke, sw) => { ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = fill; ctx.fill(); if (sw > 0) { ctx.lineWidth = sw; ctx.strokeStyle = stroke; ctx.stroke(); } };
+    const label = (txt, x, y, align) => {
+      ctx.font = 'italic 15px "STIX Two Text", "Times New Roman", serif';
+      ctx.textAlign = align; ctx.textBaseline = "middle";
+      ctx.lineWidth = 3.5; ctx.strokeStyle = th.floor; ctx.strokeText(txt, x, y);
+      ctx.fillStyle = th.ink; ctx.fillText(txt, x, y);
+    };
+    const path = (pts, color, edge, wCore) => {
+      ctx.lineJoin = "round"; ctx.lineCap = "round";
+      ctx.strokeStyle = th.floor; ctx.lineWidth = wCore + 3.8; line(pts);
+      ctx.strokeStyle = edge; ctx.lineWidth = wCore + 1.4; line(pts);
+      ctx.strokeStyle = color; ctx.lineWidth = wCore; line(pts);
+    };
+    const arrow = (A, B, color) => {
+      const sx = X(A[0]), sy = Y(A[1]), ex = X(B[0]), ey = Y(B[1]), len = Math.hypot(ex - sx, ey - sy);
+      if (len <= 2.5) return;
+      const ux = (ex - sx) / len, uy = (ey - sy) / len, hs = Math.min(8, 0.45 * len), hw = 0.55 * hs;
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex - ux * hs * 0.8, ey - uy * hs * 0.8); ctx.stroke();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(ex, ey);
+      ctx.lineTo(ex - ux * hs - uy * hw, ey - uy * hs + ux * hw); ctx.lineTo(ex - ux * hs + uy * hw, ey - uy * hs - ux * hw);
+      ctx.closePath(); ctx.fill();
+    };
+    return { ctx, w, h, X, Y, ox, oy, size, a, span, finish, line, dot, label, path, arrow };
+  }
+  function levelPiece(field, A, L, radius) {
+    const rr = radius * radius;
+    return C.march(field, L, [], (p, q) => Math.pow((p[0] + q[0]) / 2 - A[0], 2) + Math.pow((p[1] + q[1]) / 2 - A[1], 2) < rr);
+  }
+  function niceStep(n) { for (const s of [1, 2, 5, 10, 20, 25, 50, 100, 200]) if (n / s <= 6) return s; return 500; }
+  // Log-scale chart against t for one or more series {vals, upto, color}.
+  function drawLogChart(cv, series, n) {
+    const c = setupCanvas(cv);
+    if (!c) return;
+    const { ctx, w, h } = c, th = APP.theme;
+    ctx.clearRect(0, 0, w, h);
+    const ml = 46, mr = 12, mt = 8, mb = 22, pw = w - ml - mr, ph = h - mt - mb;
+    let mn = Infinity, mx = -Infinity;
+    for (const s of series) for (const v of s.vals) if (v > 0 && Number.isFinite(v)) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
+    if (!(mn < Infinity) || pw < 20) return;
+    let lo = Math.floor(Math.log10(mn)), hi = Math.ceil(Math.log10(mx));
+    if (hi - lo < 2) { hi += 1; lo -= 1; }
+    n = Math.max(1, n);
+    const X = (t) => ml + (t / n) * pw, Y = (v) => mt + ((hi - Math.log10(Math.max(v, Math.pow(10, lo)))) / (hi - lo)) * ph;
+    const span = hi - lo, dstep = span <= 6 ? 1 : span <= 12 ? 2 : 3;
+    ctx.font = '11px "IBM Plex Mono", ui-monospace, monospace'; ctx.lineWidth = 1;
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (let e = Math.ceil(lo / dstep) * dstep; e <= hi; e += dstep) {
+      const y = Math.round(Y(Math.pow(10, e))) + 0.5;
+      ctx.strokeStyle = th.rule; ctx.beginPath(); ctx.moveTo(ml, y); ctx.lineTo(ml + pw, y); ctx.stroke();
+      ctx.fillStyle = th.ink2; ctx.fillText("10" + sup(e), ml - 6, y);
+    }
+    const xs = niceStep(n);
+    ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.strokeStyle = th.box;
+    for (let t = 0; t <= n; t += xs) {
+      const x = Math.round(X(t)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, mt + ph); ctx.lineTo(x, mt + ph + 4); ctx.stroke();
+      ctx.fillStyle = th.ink2; ctx.fillText(String(t), x, mt + ph + 6);
+    }
+    ctx.beginPath(); ctx.moveTo(ml + 0.5, mt); ctx.lineTo(ml + 0.5, mt + ph + 0.5); ctx.lineTo(ml + pw, mt + ph + 0.5); ctx.stroke();
+    const dots = series.length === 1;
+    for (const s of series) {
+      const k1 = Math.min(s.upto, s.vals.length - 1);
+      if (k1 < 0) continue;
+      ctx.strokeStyle = s.color; ctx.lineWidth = dots ? 1.8 : 1.7; ctx.lineJoin = "round";
+      ctx.beginPath();
+      for (let k = 0; k <= k1; k++) { const x = X(k), y = Y(s.vals[k]); if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      ctx.stroke();
+      ctx.fillStyle = s.color;
+      if (dots) for (let k = 0; k <= k1; k++) { ctx.beginPath(); ctx.arc(X(k), Y(s.vals[k]), 1.7, 0, 2 * Math.PI); ctx.fill(); }
+      ctx.beginPath(); ctx.arc(X(k1), Y(s.vals[k1]), dots ? 4.3 : 3.6, 0, 2 * Math.PI); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = th.plate; ctx.stroke();
+    }
+  }
+
+  // ---------------------------------------------------------------- first tab: map and charts
+  let MAP = null;
+  function drawMap(fi) {
+    const R = S.run, P = S.prep, th = APP.theme;
+    const m = drawMapBase($("map"), S.fn, P);
+    if (!m) return;
+    MAP = m;
+    const t = fi.t, n = fi.n, span = m.span;
+    const showStep = S.showArrow && t < n && fi.arrowK > 0;
+    if (showStep && R.step[t] > 0.012 * span) {
+      const A = R.T[t], g = R.G[t], gn = R.gn[t];
+      const key = S.runId + ":" + t;
+      if (S.lvKey !== key) { S.lvKey = key; S.lvSegs = levelPiece(P.field, A, R.L[t], 0.11 * span); }
+      const seg = S.lvSegs, ctx = m.ctx;
+      ctx.setLineDash([4, 3]); ctx.strokeStyle = th.ink2; ctx.lineWidth = 1.3; ctx.beginPath();
+      for (let i = 0; i < seg.length; i += 4) { ctx.moveTo(m.X(seg[i]), m.Y(seg[i + 1])); ctx.lineTo(m.X(seg[i + 2]), m.Y(seg[i + 3])); }
+      ctx.stroke(); ctx.setLineDash([]);
+      const s = Math.min(0.022 * span, 0.45 * R.step[t]), ux = -g[0] / gn, uy = -g[1] / gn, vx = -uy, vy = ux;
+      ctx.strokeStyle = th.ink; ctx.lineWidth = 1;
+      m.line([[A[0] + ux * s, A[1] + uy * s], [A[0] + ux * s + vx * s, A[1] + uy * s + vy * s], [A[0] + vx * s, A[1] + vy * s]]);
+    }
+    const pts = R.T.slice(0, t + 1);
+    if (fi.m > 0) pts.push(fi.cur);
+    m.path(pts, th.accent, th.pathEdge, 2.2);
+    if (showStep) { const A = R.T[t], N = R.T[t + 1]; m.arrow(A, [A[0] + (N[0] - A[0]) * fi.arrowK, A[1] + (N[1] - A[1]) * fi.arrowK], th.blue); }
+    m.dot(m.X(P.wstar[0]), m.Y(P.wstar[1]), 4.6, th.starFill, th.ink, 1.4);
+    for (let k = 0; k <= t; k++) m.dot(m.X(R.T[k][0]), m.Y(R.T[k][1]), k === 0 ? 3.4 : 2.6, th.accent, th.stroke, 0.8);
+    m.dot(m.X(fi.cur[0]), m.Y(fi.cur[1]), 5.4, th.accent, th.plate, 2);
+    m.finish();
+    const w0x = m.X(R.T[0][0]), w0y = m.Y(R.T[0][1]), right = w0x < m.ox + m.size * 0.72;
+    m.label("w" + sup("(0)"), w0x + (right ? 9 : -9), w0y + (w0y < m.oy + 22 ? 13 : -12), right ? "left" : "right");
+    m.label("w*", m.X(P.wstar[0]) - 9, m.Y(P.wstar[1]), "right");
+  }
+  function drawCharts(fi) {
+    const R = S.run, P = S.prep;
+    drawLogChart($("chGap"), [{ vals: R.L.map((L) => Math.max(1e-12, L - P.Lstar)), upto: fi.t, color: APP.theme.blue }], R.n);
+    drawLogChart($("chStep"), [{ vals: R.step, upto: Math.min(fi.t, R.n - 1), color: APP.theme.accent }], R.n);
+  }
+
+  // ---------------------------------------------------------------- MathJax labels
+  let mjChain = Promise.resolve();
+  const pending = new Set();
+  function typeset(els) {
+    const list = els ? Array.from(els) : Array.from(document.querySelectorAll("[data-tex],[data-tex-display]"));
+    const MJ = window.MathJax;
+    const todo = list.filter((el) => el && !el.dataset.mj);
+    if (!MJ || !MJ.typesetPromise) { todo.forEach((el) => pending.add(el)); return; }
+    if (!todo.length) return;
+    todo.forEach((el) => {
+      el.dataset.mj = "1";
+      el.innerHTML = el.dataset.texDisplay ? "\\[" + el.dataset.texDisplay + "\\]" : "\\(" + el.dataset.tex + "\\)";
+    });
+    mjChain = mjChain.then(() => MJ.typesetPromise(todo)).then(() => { S.dirty = true; APP.emit("typeset"); })
+      .catch((err) => console.warn("MathJax:", err));
+  }
+
+  // ---------------------------------------------------------------- 3D panel of the first tab
+  let panel1 = null;
+  function createPanel1() {
+    if (panel1 || !window.GDPanel) return;
+    panel1 = window.GDPanel($("fig"), {
+      label: "3D loss surface with the gradient descent trajectory",
+      onView: (h, v) => { S.h = h; S.v = v; viewChanged(); },
+      onZoom: (f) => { S.zoom = clamp(S.zoom * f, 0.7, 4); viewChanged(); },
+      onReset: resetView,
+      onInteract: hideHint,
+      onResize: markDirty,
+      onShown: () => { const el = $("loading3d"); if (el) el.remove(); },
+    });
+    S.dirty = true;
+  }
+  APP.baseView = function () {
+    return { fn: S.fn, fnKey: S.fnKey, prep: S.prep, h: S.h, v: S.v, zoom: S.zoom, style: S.style,
+      showMesh: S.showMesh, showFloor: S.showFloor, showArrow: S.showArrow, themeVersion: S.themeVersion };
+  };
+  function tab1View(fi) {
+    const R = S.run, v = APP.baseView();
+    v.runKey = "gd:" + S.runId;
+    v.tracks = [{ T: R.T, L: R.L, t: fi.t, m: fi.m, cur: fi.cur, curL: fi.curL, arrowK: fi.arrowK, color: APP.theme.accent, edge: APP.theme.pathEdge }];
+    return v;
+  }
+
+  // ---------------------------------------------------------------- tabs
+  function setTab(tab) {
+    S.tab = tab;
+    const gd = tab === "gd";
+    $("viewGd").hidden = !gd; $("viewCmp").hidden = gd;
+    $("tabGd").setAttribute("aria-selected", String(gd)); $("tabCmp").setAttribute("aria-selected", String(!gd));
+    $("tabGd").tabIndex = gd ? 0 : -1; $("tabCmp").tabIndex = gd ? -1 : 0;
+    S.dirty = true;
+    APP.emit("tab");
+  }
+  APP.setTab = setTab;
+
+  // ---------------------------------------------------------------- misc
+  function hideHint() { const el = $("hint"); if (el) el.classList.add("gone"); }
+
+  // ---------------------------------------------------------------- events
+  $("bPlay").addEventListener("click", () => { setPlaying(!S.playing); S.holdUntil = 0; });
+  $("bFirst").addEventListener("click", () => goTo(0));
+  $("bLast").addEventListener("click", () => goTo(S.run.n));
+  $("bPrev").addEventListener("click", stepBack);
+  $("bNext").addEventListener("click", stepFwd);
+  $("scrub").addEventListener("input", (ev) => goTo(Number(ev.target.value)));
+  $("speed").addEventListener("input", (ev) => { S.speed = Number(ev.target.value); $("speedOut").textContent = S.speed.toFixed(1) + " steps/s"; });
+  $("etaFine").addEventListener("input", (ev) => setEta(Number(ev.target.value)));
+  $("bW0").addEventListener("click", () => setW0(S.fn.w0));
+  $("cMesh").addEventListener("change", (ev) => { S.showMesh = ev.target.checked; S.dirty = true; APP.emit("display"); });
+  $("cFloor").addEventListener("change", (ev) => { S.showFloor = ev.target.checked; S.dirty = true; APP.emit("display"); });
+  $("cArrow").addEventListener("change", (ev) => { S.showArrow = ev.target.checked; S.dirty = true; APP.emit("display"); });
+  document.querySelectorAll('input[name="style"]').forEach((r) => r.addEventListener("change", () => { S.style = r.value; S.dirty = true; APP.emit("display"); }));
+  $("bCopy").addEventListener("click", () => {
+    const txt = $("viewOut").textContent, note = $("copyNote");
+    const ok = () => { note.textContent = "Copiado: " + txt; };
+    const fallback = () => { const range = document.createRange(); range.selectNodeContents($("viewOut")); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); note.textContent = "Selected: press Ctrl+C to copy it."; };
+    try { navigator.clipboard.writeText(txt).then(ok, fallback); } catch (err) { fallback(); }
+  });
+  $("map").addEventListener("click", (ev) => {
+    if (!MAP) return;
+    const r = ev.currentTarget.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    if (x < MAP.ox || x > MAP.ox + MAP.size || y < MAP.oy || y > MAP.oy + MAP.size) return;
+    const pad = 0.02 * MAP.span;
+    setW0([clamp(MAP.a + ((x - MAP.ox) / MAP.size) * MAP.span, MAP.a + pad, MAP.a + MAP.span - pad),
+      clamp(MAP.a + ((MAP.oy + MAP.size - y) / MAP.size) * MAP.span, MAP.a + pad, MAP.a + MAP.span - pad)]);
+  });
+  $("tabGd").addEventListener("click", () => setTab("gd"));
+  $("tabCmp").addEventListener("click", () => setTab("cmp"));
+  for (const id of ["tabGd", "tabCmp"]) {
+    $(id).addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+      ev.preventDefault();
+      const next = id === "tabGd" ? "tabCmp" : "tabGd";
+      setTab(next === "tabGd" ? "gd" : "cmp");
+      $(next).focus();
+    });
+  }
+  document.addEventListener("keydown", (ev) => {
+    const tag = (ev.target && ev.target.tagName) || "";
+    if (/INPUT|TEXTAREA|SELECT/.test(tag) || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (S.tab !== "gd") { if (APP.cmpKey) APP.cmpKey(ev, tag); return; }
+    if (ev.key === " " && tag !== "BUTTON") { ev.preventDefault(); setPlaying(!S.playing); S.holdUntil = 0; }
+    else if (ev.key === "ArrowLeft" && tag !== "BUTTON") { ev.preventDefault(); stepBack(); }
+    else if (ev.key === "ArrowRight" && tag !== "BUTTON") { ev.preventDefault(); stepFwd(); }
+    else if (ev.key === "Home") { ev.preventDefault(); goTo(0); }
+    else if (ev.key === "End") { ev.preventDefault(); goTo(S.run.n); }
+  });
+  new ResizeObserver(markDirty).observe($("map"));
+  window.addEventListener("mathjax-ready", () => { typeset(); typeset(Array.from(pending)); pending.clear(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { S.themeVersion++; S.dirty = true; APP.emit("display"); });
+  window.addEventListener("gdpanel-ready", createPanel1);
+  setTimeout(hideHint, 9000);
+  setTimeout(() => { const el = $("loading3d"); if (el && !window.GDPanel) el.textContent = "The 3D view (three.js) could not be loaded. The top view, the charts and the controls still work."; }, 12000);
+
+  // ---------------------------------------------------------------- start
+  readTheme();
+  buildFnChips();
+  setFunction("fig");
+  typeset();
+  createPanel1();
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (S.tab === "gd") {
+      if (S.playing && now >= S.holdUntil) advance(dt);
+      if (S.dirty || S.playing) {
+        const fi = frameInfo();
+        if (panel1) { try { panel1.render(tab1View(fi)); } catch (err) { console.error(err); } }
+        drawMap(fi);
+        drawCharts(fi);
+        updateReadouts(fi);
+        S.dirty = false;
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+<script>
+(function () {
+  "use strict";
+  const APP = window.APP, C = APP.C, S = APP.S, U = APP.util;
+  const $ = (id) => document.getElementById(id);
+  const ORDER = ["gd", "momentum", "nesterov", "rmsprop", "adam", "sgd"];
+  // Categorical hues checked with the palette validator on the white plate, all pairs: lightness band,
+  // chroma and normal-vision floor pass; RMSProp/Adam under deutan (6.1) relies on the names that every
+  // card, row and legend carries. Orange is the path of the first tab. Second value: a darker step of
+  // the same hue for path outlines.
+  const COLORS = {
+    gd: ["#d96c00", "#6e3400"], momentum: ["#2a78d6", "#153c6b"], nesterov: ["#4a3aa7", "#251d53"],
+    rmsprop: ["#1baf7a", "#0d573d"], adam: ["#e87ba4", "#743d52"], sgd: ["#5d6b00", "#2e3500"],
+  };
+  const RULES = {
+    gd: ["w^{(t+1)} = w^{(t)} - \\alpha\\, g^{(t)}"],
+    momentum: ["b^{(t+1)} = \\mu\\, b^{(t)} + g^{(t)}", "w^{(t+1)} = w^{(t)} - \\alpha\\, b^{(t+1)}"],
+    nesterov: ["b^{(t+1)} = \\mu\\, b^{(t)} + g^{(t)}", "w^{(t+1)} = w^{(t)} - \\alpha\\,\\big(g^{(t)} + \\mu\\, b^{(t+1)}\\big)"],
+    rmsprop: ["s^{(t+1)} = \\rho\\, s^{(t)} + (1-\\rho)\\,\\big(g^{(t)}\\big)^{2}", "w^{(t+1)} = w^{(t)} - \\alpha\\, g^{(t)} / \\big(\\sqrt{s^{(t+1)}} + \\epsilon\\big)"],
+    adam: ["m^{(t+1)} = \\beta_1 m^{(t)} + (1-\\beta_1)\\, g^{(t)}", "v^{(t+1)} = \\beta_2 v^{(t)} + (1-\\beta_2)\\,\\big(g^{(t)}\\big)^{2}",
+      "\\hat m = m^{(t+1)}/(1-\\beta_1^{\\,t+1}),\\ \\hat v = v^{(t+1)}/(1-\\beta_2^{\\,t+1})", "w^{(t+1)} = w^{(t)} - \\alpha\\, \\hat m / \\big(\\sqrt{\\hat v} + \\epsilon\\big)"],
+    sgd: ["w^{(t+1)} = w^{(t)} - \\alpha\\,\\big(g^{(t)} + \\sigma\\, \\xi^{(t)}\\big),\\ \\xi^{(t)} \\sim \\mathcal{N}(0, I)"],
+  };
+  // Names inside an English sentence.
+  const NAME = { gd: "gradient descent", momentum: "momentum", nesterov: "Nesterov", rmsprop: "RMSProp", adam: "Adam" };
+  const KS = ["auto", 50, 100, 150, 300];
+  const CS = {
+    selected: new Set(["gd", "momentum", "rmsprop", "adam"]),
+    preset: "all", etaSame: 0.05,
+    etaManual: { gd: 0.05, momentum: 0.005, nesterov: 0.005, rmsprop: 0.05, adam: 0.1 },
+    hp: { mu: 0.9, rho: 0.99, b1: 0.9, b2: 0.999, sigma: 2 }, etaSgd: 0.02,
+    K: "auto", Kused: 150, runs: {}, tuneCache: {}, nMax: 0, runId: 0,
+    p: 0, playing: false, speed: 8, holdUntil: 0, acc: 0, dirty: true, started: false,
+    cards: {}, panels: {},
+  };
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const listEs = (xs) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1]);
+  const comma = (v) => String(v);
+  const LONG = String(C.K_LONG).replace(/\B(?=(\d{3})+(?!\d))/g, " ");   // 10 000
+
+  // ---------------------------------------------------------------- configurations and runs
+  function hpBase(kind) {
+    if (kind === "momentum" || kind === "nesterov") return { mu: CS.hp.mu };
+    if (kind === "rmsprop") return { rho: CS.hp.rho };
+    if (kind === "adam") return { b1: CS.hp.b1, b2: CS.hp.b2 };
+    if (kind === "sgd") return { sigma: CS.hp.sigma };
+    return {};
+  }
+  // eta alone (all = false; mu, rho and beta as set in the panel) or eta together with them
+  // (all = true), on the grids of GDCore.tune. Cached per function, starting point and fixed values.
+  function tuned(kind, all) {
+    const key = [S.fnKey, S.w0.join(","), kind, all ? "all" : JSON.stringify(hpBase(kind))].join("|");
+    if (!(key in CS.tuneCache)) CS.tuneCache[key] = C.tune(S.fn, S.prep, kind, S.w0, hpBase(kind), all);
+    return CS.tuneCache[key];
+  }
+  // Configuration of one method under the active preset: { hp, a }, with a the long-run assessment
+  // of GDCore.assess (null for SGD: with a constant eta its noise never lets it settle).
+  function config(kind) {
+    if (kind === "sgd") return { hp: Object.assign({ eta: CS.etaSgd }, hpBase(kind)), a: null };
+    if (CS.preset === "all" || CS.preset === "tuned") return tuned(kind, CS.preset === "all");
+    const hp = Object.assign({ eta: CS.preset === "same" ? CS.etaSame : CS.etaManual[kind] }, hpBase(kind));
+    return { hp, a: C.assess(S.fn, kind, S.w0, hp, S.prep.Lstar, -1) };
+  }
+  // Last step worth showing: where the method settles, where it moves away again (if that is within
+  // the longest horizon) or where it leaves the domain.
+  function keyStep(a) {
+    if (!a) return -1;
+    if (a.status === "stays") return a.settle;
+    if (a.status === "leaves") return a.leave <= C.K_SHOW ? a.leave : a.arrive;
+    return a.status === "out" ? a.step : -1;
+  }
+  // The "auto" horizon is the latest key step among the methods plus 10 (between 50 and 400).
+  function recompute(autoplay) {
+    CS.runs = {};
+    CS.nMax = 0;
+    const cfg = {};
+    let slowest = 0;
+    for (const kind of ORDER) {
+      if (!CS.selected.has(kind)) continue;
+      cfg[kind] = config(kind);
+      if (kind !== "sgd") slowest = Math.max(slowest, keyStep(cfg[kind].a));
+    }
+    CS.Kused = CS.K === "auto" ? (slowest > 0 ? U.clamp(slowest + 10, 50, C.K_SHOW) : 150) : CS.K;
+    for (const kind of Object.keys(cfg)) {
+      const r = C.runOpt(S.fn, kind, S.w0, cfg[kind].hp, CS.Kused, 7);
+      r.a = cfg[kind].a;
+      CS.runs[kind] = r;
+      CS.nMax = Math.max(CS.nMax, r.n);
+    }
+    CS.runId++; CS.acc = 0;
+    $("cScrub").max = String(CS.nMax);
+    if (APP.reduceMotion) { CS.p = CS.nMax; setPlaying(false); }
+    else { CS.p = 0; setPlaying(Boolean(autoplay)); CS.holdUntil = performance.now() + 600; }
+    syncCards(); buildTable(); buildLegend(); buildRace(); updateIntro(); updatePresetNote(); buildManualGrid(); buildKChips();
+    lastFootKey = ""; CS.dirty = true;
+  }
+
+  // ---------------------------------------------------------------- playback
+  function setPlaying(on) {
+    if (on && CS.p >= CS.nMax) CS.p = 0;
+    CS.playing = on;
+    $("cPlayText").textContent = on ? "Pause" : "Play";
+    $("cPlay").setAttribute("aria-label", on ? "Pause" : "Play");
+    $("cPlayIcon").innerHTML = on ? '<path d="M4 2h3v12H4zM9 2h3v12H9z"/>' : '<path d="M4 2v12l10-6z"/>';
+    CS.dirty = true;
+  }
+  function advance(dt) {
+    if (APP.reduceMotion) {
+      CS.acc += dt * CS.speed;
+      while (CS.acc >= 1 && CS.p < CS.nMax) { CS.p = Math.floor(CS.p) + 1; CS.acc -= 1; }
+    } else {
+      CS.p = Math.min(CS.nMax, CS.p + dt * CS.speed);
+    }
+    if (CS.p >= CS.nMax) { CS.p = CS.nMax; setPlaying(false); }
+    CS.dirty = true;
+  }
+  function goTo(p) { setPlaying(false); CS.p = U.clamp(p, 0, CS.nMax); CS.dirty = true; }
+  function stepBack() { const t = Math.floor(CS.p + 1e-9); goTo(CS.p - t > 1e-6 ? t : t - 1); }
+  function stepFwd() { goTo(Math.floor(CS.p + 1e-9) + 1); }
+
+  // ---------------------------------------------------------------- cards with one 3D panel each
+  function hpParts(hp) {
+    const parts = ["α = " + U.fmtEta(hp.eta)];
+    if ("mu" in hp) parts.push("μ = " + hp.mu);
+    if ("rho" in hp) parts.push("ρ = " + hp.rho);
+    if ("b1" in hp) parts.push("β₁ = " + hp.b1, "β₂ = " + hp.b2);
+    if ("sigma" in hp) parts.push("σ = " + hp.sigma);
+    return parts;
+  }
+  // Values of the run shown, and which of them were tuned.
+  function hpInfo(kind) {
+    const r = CS.runs[kind], parts = r ? hpParts(r.hp) : [];
+    let note = "";
+    if (r && kind !== "sgd" && CS.preset === "all") note = "tuned";
+    else if (r && kind !== "sgd" && CS.preset === "tuned") parts[0] += " (tuned)";
+    return { parts, note };
+  }
+  function hpText(kind) {
+    const h = hpInfo(kind);
+    return h.parts.join(" · ") + (h.note ? " (" + h.note + ")" : "");
+  }
+  function makePanel(kind) {
+    if (CS.panels[kind] || !window.GDPanel || !CS.cards[kind]) return;
+    CS.panels[kind] = window.GDPanel(CS.cards[kind].fig, {
+      compact: true,
+      label: "3D loss surface with the trajectory of " + C.OPTIM[kind].name,
+      onView: (h, v) => { S.h = h; S.v = v; APP.viewChanged(); },
+      onZoom: (f) => { S.zoom = U.clamp(S.zoom * f, 0.7, 4); APP.viewChanged(); },
+      onReset: APP.resetView,
+      onResize: () => { CS.dirty = true; },
+    });
+  }
+  function syncCards() {
+    const grid = $("cmpGrid");
+    for (const kind of Object.keys(CS.cards)) {
+      if (CS.selected.has(kind)) continue;
+      if (CS.panels[kind] && CS.panels[kind].dispose) CS.panels[kind].dispose();
+      delete CS.panels[kind];
+      CS.cards[kind].el.remove();
+      delete CS.cards[kind];
+    }
+    for (const kind of ORDER) {
+      if (!CS.selected.has(kind)) continue;
+      if (!CS.cards[kind]) {
+        const el = document.createElement("article");
+        el.className = "opt-card";
+        el.style.setProperty("--c", COLORS[kind][0]);
+        el.innerHTML = '<header><h3>' + C.OPTIM[kind].name + '</h3><span class="hp"></span></header>'
+          + '<div class="fig"></div><p class="cardfoot">–</p>';
+        CS.cards[kind] = { el, fig: el.querySelector(".fig"), hp: el.querySelector(".hp"), foot: el.querySelector(".cardfoot") };
+      }
+      grid.appendChild(CS.cards[kind].el);   // keeps the order of ORDER
+      CS.cards[kind].hp.textContent = hpText(kind);
+      makePanel(kind);
+    }
+  }
+  let lastFootKey = "";
+  function updateFoots(frames) {
+    const key = CS.runId + ":" + Math.floor(CS.p + 1e-9);
+    if (key === lastFootKey) return;
+    lastFootKey = key;
+    for (const kind of Object.keys(frames)) {
+      const r = CS.runs[kind], fi = frames[kind], card = CS.cards[kind], a = r.a;
+      if (!card) continue;
+      const gap = Math.max(0, r.L[fi.t] - S.prep.Lstar);
+      let html = "t = <b>" + fi.t + "</b> · J − J* = <b>" + U.sci(gap, 2) + "</b>";
+      if (fi.t < r.n) html += " · step = " + U.sci(r.step[fi.t], 2);
+      if (r.status === "out" && fi.t >= r.n) html += ' · <span class="flag">leaves the domain at step ' + (r.n + 1) + "</span>";
+      else if (a && a.status === "stays" && fi.t >= a.settle) html += ' · <span class="ok">✓ arrives at t = ' + a.settle + "</span>";
+      else if (a && a.status === "leaves" && fi.t >= a.arrive) html += ' · <span class="flag">arrives at t = ' + a.arrive + ", moves away at step " + a.leave + "</span>";
+      card.foot.innerHTML = html;
+    }
+    const t = Math.floor(CS.p + 1e-9);
+    $("cTOut").textContent = "t = " + t + " / " + CS.nMax;
+    $("cScrub").value = String(t);
+  }
+
+  // ---------------------------------------------------------------- table, legend, notes
+  function reachCell(kind, r) {
+    const a = r.a;
+    if (kind === "sgd") return r.status === "out" ? "leaves the domain<br>at step " + (r.n + 1) : "does not stay<br>(noise)";
+    if (a.status === "stays") return String(a.settle);
+    if (a.status === "out") return "leaves the domain<br>at step " + a.step;
+    if (a.status === "leaves") return "does not stay<br><small>arrives at " + a.arrive + ",<br>moves away at " + a.leave + "</small>";
+    return "&gt; " + C.K_SHOW;
+  }
+  function hpCell(kind) {
+    const h = hpInfo(kind);
+    return h.parts.join("<br>") + (h.note ? "<br><small>(" + h.note + ")</small>" : "");
+  }
+  function buildTable() {
+    const tb = $("cmpTable").querySelector("tbody"), P = S.prep, els = [];
+    tb.textContent = "";
+    for (const kind of ORDER) {
+      const r = CS.runs[kind];
+      if (!r) continue;
+      const tr = document.createElement("tr");
+      const last = r.T[r.n], dist = Math.hypot(last[0] - P.wstar[0], last[1] - P.wstar[1]);
+      tr.innerHTML = '<td class="name"><span><i class="swatch" style="--c:' + COLORS[kind][0] + '"></i>' + C.OPTIM[kind].name + "</span></td>"
+        + '<td class="rule"></td><td class="hpc">' + hpCell(kind) + '</td><td class="num">' + reachCell(kind, r) + '</td><td class="num">' + U.sci(dist, 2) + "</td>";
+      const cell = tr.querySelector(".rule");
+      RULES[kind].forEach((tex, i) => {
+        if (i) cell.appendChild(document.createElement("br"));
+        const sp = document.createElement("span");
+        sp.dataset.tex = tex;
+        sp.textContent = tex.replace(/\\[a-zA-Z]+|[{}^_]/g, " ");
+        cell.appendChild(sp);
+        els.push(sp);
+      });
+      tb.appendChild(tr);
+    }
+    APP.typeset(els);
+  }
+  function buildLegend() {
+    const box = $("cmpLegend");
+    box.textContent = "";
+    for (const kind of ORDER) {
+      if (!CS.runs[kind]) continue;
+      const sp = document.createElement("span");
+      sp.style.setProperty("--c", COLORS[kind][0]);
+      sp.innerHTML = "<i></i>" + C.OPTIM[kind].short;
+      box.appendChild(sp);
+    }
+  }
+
+  // ---------------------------------------------------------------- who gets there first
+  // One row per deterministic method, sorted by the result with everything tuned: a ring for "only
+  // eta tuned" and a dot for "everything tuned", both with the long-run criterion. Methods that never
+  // settle sit in a band on the right. Positions are per cent of the track.
+  function describe(t) {
+    const a = t.a;
+    if (a.status === "stays") return "stays from step " + a.settle;
+    if (a.status === "leaves") return "arrives at step " + a.arrive + " but moves away at " + a.leave;
+    if (a.status === "out") return "leaves the domain";
+    return "does not arrive in " + C.K_SHOW + " steps";
+  }
+  function buildRace() {
+    const box = $("race"), rows = [];
+    for (const kind of ORDER) if (CS.selected.has(kind) && kind !== "sgd") rows.push({ kind, eta: tuned(kind, false), all: tuned(kind, true) });
+    const val = (t) => (t.a.status === "stays" ? t.a.settle : Infinity), arr = (t) => (t.a.status === "leaves" ? t.a.arrive : Infinity);
+    rows.sort((p, q) => (val(p.all) - val(q.all)) || (arr(p.all) - arr(q.all)) || 0);
+    let max = 0, ns = false;
+    for (const r of rows) for (const t of [r.eta, r.all]) { if (t.a.status === "stays") max = Math.max(max, t.a.settle); else ns = true; }
+    const step = [5, 10, 20, 25, 50, 100, 200, 250].find((s) => max / s <= 4) || 500, top = Math.max(step, Math.ceil(max / step) * step);
+    const END = ns ? 76 : 92, NS0 = 82, NSM = 91;
+    const X = (v) => (v / top) * END;
+    let html = '<div class="race-plot"><div class="race-grid" aria-hidden="true">';
+    for (let v = 0; v <= top; v += step) html += '<i style="left:' + X(v) + '%"></i>';
+    if (ns) html += '<b style="left:' + NS0 + '%"></b>';
+    html += "</div>";
+    const labels = [];
+    for (const r of rows) {
+      const c = COLORS[r.kind][0], se = r.eta.a.status === "stays", sa = r.all.a.status === "stays";
+      const xe = se ? X(r.eta.a.settle) : NSM - (sa ? 0 : 2.8), xa = sa ? X(r.all.a.settle) : NSM + (se ? 0 : 2.8);
+      const tip = (t, what) => C.OPTIM[r.kind].name + ", " + what + ": " + describe(t) + " (" + hpParts(t.hp).join(" · ") + ")";
+      let row = '<div class="race-row" style="--c:' + c + '"><span class="race-name">' + C.OPTIM[r.kind].short + '</span><div class="race-track">';
+      if (Math.abs(xe - xa) > 0.5) row += '<span class="race-line" style="left:' + Math.min(xe, xa) + "%;width:" + Math.abs(xe - xa) + '%"></span>';
+      row += '<span class="race-mk ring" tabindex="0" role="img" style="left:' + xe + '%" aria-label="' + tip(r.eta, "only α tuned") + '" data-tip="' + tip(r.eta, "only α tuned") + '"></span>';
+      row += '<span class="race-mk dot" tabindex="0" role="img" style="left:' + xa + '%" aria-label="' + tip(r.all, "all tuned") + '" data-tip="' + tip(r.all, "all tuned") + '"></span>';
+      // Numbers next to the markers that settle, on their outer sides; only the dot's number when the
+      // two would have to share the gap between close markers.
+      const lab = (x, txt, side, main) => '<span class="race-val ' + side + (main ? " main" : "") + '" style="left:' + x + '%">' + txt + "</span>";
+      const two = se && sa && Math.abs(xe - xa) > 0.5, lo = Math.min(xe, xa), hi = Math.max(xe, xa);
+      if (two && ((lo >= 12 && hi <= END - 10) || hi - lo >= 16)) {
+        const txt = (x) => (x === xe ? r.eta.a.settle : r.all.a.settle), main = (x) => x === xa;
+        row += lab(lo, txt(lo), lo >= 12 ? "l" : "r", main(lo)) + lab(hi, txt(hi), hi <= END - 10 ? "r" : "l", main(hi));
+      } else if (sa) row += lab(xa, r.all.a.settle, xa > END - 10 || (se && xe > xa && xa >= 12) ? "l" : "r", true);
+      else if (se) row += lab(xe, r.eta.a.settle, xe > END - 10 ? "l" : "r", false);
+      row += "</div></div>";
+      html += row;
+      labels.push(C.OPTIM[r.kind].name + ": only α tuned, " + describe(r.eta) + "; all tuned, " + describe(r.all));
+    }
+    html += '<div class="race-axis" aria-hidden="true"><span></span><div class="race-ticks">';
+    for (let v = 0; v <= top; v += step) html += '<span style="left:' + X(v) + '%">' + v + "</span>";
+    if (ns) html += '<span class="ns" style="left:' + NSM + '%">does not<br>stay</span>';
+    html += '</div></div></div><div class="race-tip" id="raceTip" hidden></div>';
+    box.innerHTML = html;
+    box.setAttribute("aria-label", "Steps until staying at the minimum. " + labels.join(". ") + ".");
+    const tipEl = $("raceTip");
+    const show = (mk) => {
+      tipEl.textContent = mk.dataset.tip;
+      tipEl.hidden = false;
+      const b = box.getBoundingClientRect(), m = mk.getBoundingClientRect();
+      const x = U.clamp(m.left + m.width / 2 - b.left - tipEl.offsetWidth / 2, 0, Math.max(0, b.width - tipEl.offsetWidth));
+      tipEl.style.left = x + "px";
+      tipEl.style.top = (m.top - b.top - tipEl.offsetHeight - 6) + "px";
+    };
+    box.querySelectorAll(".race-mk").forEach((mk) => {
+      mk.addEventListener("pointerenter", () => show(mk));
+      mk.addEventListener("focus", () => show(mk));
+      mk.addEventListener("pointerleave", () => { tipEl.hidden = true; });
+      mk.addEventListener("blur", () => { tipEl.hidden = true; });
+    });
+    const fixed = ["μ = " + CS.hp.mu, "ρ = " + CS.hp.rho, "β₁ = " + CS.hp.b1, "β₂ = " + CS.hp.b2].join(", ");
+    $("raceCap").innerHTML = "Empty circle: only α is tuned (" + fixed + "). Filled circle: μ, ρ, β<sub>1</sub> and β<sub>2</sub> are tuned too."
+      + (ns ? " “Does not stay”: it goes below the threshold but moves away again before step " + LONG + "." : "")
+      + (rows.some((r) => r.kind === "gd") ? " For gradient descent both coincide: its only hyperparameter is α." : "")
+      + " Hover over a circle to see when it arrives and with which values.";
+  }
+
+  function updateIntro() {
+    const P = S.prep, kappa = P.lam[1] / P.lam[0];
+    const head = {
+      fig: "<b>Example function</b> (κ ≈ " + kappa.toFixed(1) + " at the minimum: well conditioned).",
+      valle: "<b>Curved valley</b> (κ ≈ " + kappa.toFixed(1) + " at the minimum: well conditioned).",
+      estrecho: "<b>Narrow valley</b> (κ = " + kappa.toFixed(0) + ": ill-conditioned). The curvature across the valley is " + kappa.toFixed(0) + " times larger than along it.",
+    }[S.fnKey];
+    const det = ORDER.filter((k) => k !== "sgd" && CS.runs[k]), A = (k) => CS.runs[k].a;
+    const stay = det.filter((k) => A(k).status === "stays").sort((p, q) => A(p).settle - A(q).settle);
+    const lead = { all: "With all the hyperparameters tuned", tuned: "Tuning only α", same: "With the same α for all", manual: "With the α chosen by hand" }[CS.preset];
+    const parts = [head];
+    if (stay.length) parts.push(lead + ", " + listEs(stay.map((k, i) => NAME[k] + " in " + A(k).settle + (i ? "" : " steps"))) + (stay.length > 1 ? " stay" : " stays") + " at J − J* &lt; 10<sup>−6</sup>.");
+    const rest = det.filter((k) => A(k).status !== "stays").map((k) => {
+      const a = A(k);
+      if (a.status === "leaves") return cap(NAME[k]) + " arrives at " + a.arrive + " but moves away at step " + a.leave;
+      if (a.status === "out") return cap(NAME[k]) + " leaves the domain at step " + a.step;
+      return cap(NAME[k]) + " does not arrive in " + C.K_SHOW + " steps";
+    });
+    if (rest.length) parts.push((stay.length ? "" : lead + ": ") + rest.join("; ") + ".");
+    const adaptive = det.filter((k) => (k === "rmsprop" || k === "adam") && A(k).status === "leaves");
+    if (adaptive.length) parts.push("With a constant α, the step of " + listEs(adaptive.map((k) => NAME[k])) + " does not shrink near the minimum.");
+    const gd = CS.runs.gd ? A("gd") : null, best = stay[0];
+    if (CS.preset === "tuned" && (CS.runs.momentum || CS.runs.nesterov)) {
+      parts.push("With μ = " + CS.hp.mu + ", near the minimum momentum cannot approach <i>w</i>* faster than a factor √μ ≈ " + Math.sqrt(CS.hp.mu).toFixed(2)
+        + " per step, whatever α is. For a fair comparison, choose “All tuned”.");
+    } else if (CS.preset === "all" && gd && gd.status === "stays" && best === "gd") {
+      parts.push("With μ = 0, momentum and Nesterov are exactly gradient descent, so when well tuned they cannot take longer than it.");
+    } else if (CS.preset === "all" && gd && gd.status === "stays" && best) {
+      const ratio = gd.settle / A(best).settle;
+      parts.push(kappa < 10
+        ? "On a well-conditioned function a single α works in all directions, so gradient descent is already fast: "
+          + NAME[best] + (ratio < 1.5 ? ", the fastest, barely improves on it (" : " arrives earlier (") + A(best).settle + " steps versus " + gd.settle
+          + "). With μ = 0, momentum and Nesterov are exactly gradient descent."
+        : "Gradient descent needs a small α not to bounce off the walls, and moves slowly along the bottom; momentum builds up speed along the valley and Adam rescales each component of the step.");
+    }
+    parts.push("All the panels share the time <i>t</i> and the view; drag any of them to rotate them all.");
+    $("cmpIntro").innerHTML = parts.join(" ");
+  }
+  function updatePresetNote() {
+    const note = $("presetNote"), grid = "α ∈ {1, 1.5, 2, 3, 5, 7} × 10<sup>k</sup>, from 10<sup>−4</sup> to 1";
+    const set = (xs) => "{" + xs.map(comma).join(", ") + "}";
+    $("sameRow").hidden = CS.preset !== "same";
+    $("manualGrid").hidden = CS.preset !== "manual";
+    $("hpNote").hidden = CS.preset !== "all";
+    if (CS.preset === "all") {
+      note.innerHTML = "For each method all the combinations of " + grid + " and of its own hyperparameters are tried: μ ∈ " + set(C.HP_GRID.mu)
+        + ", ρ ∈ " + set(C.HP_GRID.rho) + ", β<sub>1</sub> ∈ " + set(C.HP_GRID.b1) + " and β<sub>2</sub> ∈ " + set(C.HP_GRID.b2)
+        + ". The winner is the one that first stays at J − J* &lt; 10<sup>−6</sup> up to step " + LONG
+        + " without leaving the domain; if none stays, the one that arrives first. With μ = 0, momentum and Nesterov are gradient descent. SGD is not tuned.";
+    } else if (CS.preset === "tuned") {
+      note.innerHTML = "Only α is tuned (" + grid + "), with the same criterion as in “All tuned”; μ, ρ, β<sub>1</sub> and β<sub>2</sub> stay fixed at the values in “Hyperparameters”. "
+        + "It must stay up to step " + LONG + ": with a constant α, RMSProp and Adam can go below the threshold and move away hundreds of steps later. SGD is not tuned.";
+    } else if (CS.preset === "same") {
+      note.innerHTML = "With the same α the comparison is not balanced: with momentum, a constant gradient gives steps 1/(1 − μ) times larger, and in RMSProp and Adam the step hardly depends on the size of the gradient.";
+    } else {
+      note.textContent = "α set by hand for each method; μ, ρ, β₁ and β₂ as in “Hyperparameters”.";
+    }
+  }
+  function buildManualGrid() {
+    const box = $("manualGrid");
+    if (CS.preset !== "manual") { box.textContent = ""; return; }
+    box.textContent = "";
+    for (const kind of ORDER) {
+      if (!CS.selected.has(kind) || kind === "sgd") continue;
+      const lab = document.createElement("span");
+      lab.innerHTML = '<i class="swatch" style="--c:' + COLORS[kind][0] + '"></i>' + C.OPTIM[kind].short;
+      const inp = document.createElement("input");
+      inp.type = "number"; inp.min = "0.0001"; inp.max = "1"; inp.step = "0.0005"; inp.value = String(CS.etaManual[kind]);
+      inp.id = "etaMan-" + kind;
+      inp.setAttribute("aria-label", "α of " + C.OPTIM[kind].name);
+      inp.addEventListener("change", () => { const v = Number(inp.value); if (v > 0) { CS.etaManual[kind] = v; recompute(true); } });
+      box.append(lab, inp);
+    }
+  }
+  function buildChecks() {
+    const box = $("optChecks");
+    box.textContent = "";
+    for (const kind of ORDER) {
+      const lab = document.createElement("label");
+      lab.innerHTML = '<input type="checkbox" id="opt-' + kind + '"' + (CS.selected.has(kind) ? " checked" : "") + '><i class="swatch" style="--c:' + COLORS[kind][0] + '"></i>' + C.OPTIM[kind].name;
+      const inp = lab.querySelector("input");
+      inp.addEventListener("change", () => {
+        if (inp.checked) CS.selected.add(kind);
+        else if (CS.selected.size > 1) CS.selected.delete(kind);
+        else inp.checked = true;
+        recompute(true);
+      });
+      box.appendChild(lab);
+    }
+  }
+  function buildKChips() {
+    const box = $("kChips");
+    box.textContent = "";
+    for (const K of KS) {
+      const lab = document.createElement("label");
+      lab.className = "chip";
+      lab.innerHTML = '<input type="radio" name="kk" value="' + K + '"' + (K === CS.K ? " checked" : "") + "><span>" + (K === "auto" ? "auto <em>" + CS.Kused + "</em>" : K) + "</span>";
+      lab.querySelector("input").addEventListener("change", () => { CS.K = K; recompute(true); });
+      box.appendChild(lab);
+    }
+  }
+
+  // ---------------------------------------------------------------- drawing
+  let MAPC = null;
+  function draw() {
+    const frames = {}, th = APP.theme, P = S.prep;
+    for (const kind of ORDER) {
+      const r = CS.runs[kind];
+      if (r) frames[kind] = APP.frameAt(r.T, r.L, Math.min(CS.p, r.n), CS.playing && CS.p < r.n);
+    }
+    for (const kind of Object.keys(frames)) {
+      const panel = CS.panels[kind], r = CS.runs[kind], fi = frames[kind];
+      if (!panel) continue;
+      const v = APP.baseView();
+      v.runKey = "cmp:" + CS.runId + ":" + kind;
+      v.arrowColor = th.ink;
+      v.tracks = [{ T: r.T, L: r.L, t: fi.t, m: fi.m, cur: fi.cur, curL: fi.curL, arrowK: fi.arrowK, color: COLORS[kind][0], edge: COLORS[kind][1] }];
+      try { panel.render(v); } catch (err) { console.error(err); }
+    }
+    // overlaid paths on the common map
+    const m = APP.drawMapBase($("cmpMap"), S.fn, P);
+    if (m) {
+      MAPC = m;
+      for (const kind of Object.keys(frames)) {
+        const r = CS.runs[kind], fi = frames[kind], pts = r.T.slice(0, fi.t + 1);
+        if (fi.m > 0) pts.push(fi.cur);
+        m.path(pts, COLORS[kind][0], COLORS[kind][1], 1.8);
+      }
+      m.dot(m.X(P.wstar[0]), m.Y(P.wstar[1]), 4.6, th.starFill, th.ink, 1.4);
+      for (const kind of Object.keys(frames)) m.dot(m.X(frames[kind].cur[0]), m.Y(frames[kind].cur[1]), 4.6, COLORS[kind][0], th.plate, 1.6);
+      m.finish();
+      const w0x = m.X(S.w0[0]), w0y = m.Y(S.w0[1]), right = w0x < m.ox + m.size * 0.72;
+      m.label("w⁽⁰⁾", w0x + (right ? 9 : -9), w0y + (w0y < m.oy + 22 ? 13 : -12), right ? "left" : "right");
+      m.label("w*", m.X(P.wstar[0]) - 9, m.Y(P.wstar[1]), "right");
+    }
+    const gaps = [], steps = [];
+    for (const kind of Object.keys(frames)) {
+      const r = CS.runs[kind], fi = frames[kind];
+      gaps.push({ vals: r.L.map((L) => Math.max(1e-12, L - P.Lstar)), upto: fi.t, color: COLORS[kind][0] });
+      if (r.step.length) steps.push({ vals: r.step, upto: Math.min(fi.t, r.step.length - 1), color: COLORS[kind][0] });
+    }
+    APP.drawLogChart($("cmpGap"), gaps, CS.nMax);
+    APP.drawLogChart($("cmpStep"), steps, CS.nMax);
+    updateFoots(frames);
+  }
+
+  // ---------------------------------------------------------------- events
+  $("cPlay").addEventListener("click", () => { setPlaying(!CS.playing); CS.holdUntil = 0; });
+  $("cFirst").addEventListener("click", () => goTo(0));
+  $("cLast").addEventListener("click", () => goTo(CS.nMax));
+  $("cPrev").addEventListener("click", stepBack);
+  $("cNext").addEventListener("click", stepFwd);
+  $("cScrub").addEventListener("input", (ev) => goTo(Number(ev.target.value)));
+  $("cSpeed").addEventListener("input", (ev) => { CS.speed = Number(ev.target.value); $("cSpeedOut").textContent = CS.speed.toFixed(1) + " steps/s"; });
+  document.querySelectorAll('input[name="preset"]').forEach((r) => r.addEventListener("change", () => { CS.preset = r.value; recompute(true); }));
+  $("etaSame").addEventListener("change", (ev) => { const v = Number(ev.target.value); if (v > 0) { CS.etaSame = v; recompute(true); } });
+  for (const [id, key] of [["hpMu", "mu"], ["hpRho", "rho"], ["hpB1", "b1"], ["hpB2", "b2"], ["hpSigma", "sigma"]]) {
+    $(id).addEventListener("change", (ev) => { const v = Number(ev.target.value); if (Number.isFinite(v) && v >= 0) { CS.hp[key] = v; recompute(true); } });
+  }
+  $("hpEtaSgd").addEventListener("change", (ev) => { const v = Number(ev.target.value); if (v > 0) { CS.etaSgd = v; recompute(true); } });
+  $("cmpMap").addEventListener("click", (ev) => {
+    if (!MAPC) return;
+    const r = ev.currentTarget.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    if (x < MAPC.ox || x > MAPC.ox + MAPC.size || y < MAPC.oy || y > MAPC.oy + MAPC.size) return;
+    const pad = 0.02 * MAPC.span;
+    APP.setW0([U.clamp(MAPC.a + ((x - MAPC.ox) / MAPC.size) * MAPC.span, MAPC.a + pad, MAPC.a + MAPC.span - pad),
+      U.clamp(MAPC.a + ((MAPC.oy + MAPC.size - y) / MAPC.size) * MAPC.span, MAPC.a + pad, MAPC.a + MAPC.span - pad)]);
+  });
+  APP.cmpKey = (ev, tag) => {
+    if (ev.key === " " && tag !== "BUTTON") { ev.preventDefault(); setPlaying(!CS.playing); CS.holdUntil = 0; }
+    else if (ev.key === "ArrowLeft" && tag !== "BUTTON") { ev.preventDefault(); stepBack(); }
+    else if (ev.key === "ArrowRight" && tag !== "BUTTON") { ev.preventDefault(); stepFwd(); }
+    else if (ev.key === "Home") { ev.preventDefault(); goTo(0); }
+    else if (ev.key === "End") { ev.preventDefault(); goTo(CS.nMax); }
+  };
+  APP.on("fn", () => { CS.tuneCache = {}; if (CS.started) recompute(S.tab === "cmp"); });
+  APP.on("w0", () => { if (CS.started) recompute(S.tab === "cmp"); });
+  APP.on("view", () => { CS.dirty = true; });
+  APP.on("display", () => { CS.dirty = true; });
+  APP.on("typeset", () => { CS.dirty = true; });
+  APP.on("tab", () => {
+    if (S.tab !== "cmp") return;
+    if (!CS.started) { CS.started = true; recompute(true); }
+    CS.dirty = true;
+  });
+  window.addEventListener("gdpanel-ready", () => { for (const kind of Object.keys(CS.cards)) makePanel(kind); CS.dirty = true; });
+  new ResizeObserver(() => { CS.dirty = true; }).observe($("cmpMap"));
+
+  // ---------------------------------------------------------------- start
+  buildChecks();
+  buildKChips();
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (S.tab === "cmp" && CS.started) {
+      if (CS.playing && now >= CS.holdUntil) advance(dt);
+      if (CS.dirty || CS.playing) { draw(); CS.dirty = false; }
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  if (location.hash === "#comparar") APP.setTab("cmp");
+})();
+</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { Line2 } from "three/addons/lines/Line2.js";
+import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { LineGeometry } from "three/addons/lines/LineGeometry.js";
+import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
+
+const APP = window.APP;
+const DEG = Math.PI / 180;
+// Flat colours taken literally from the CSS tokens (no lighting, no colour-space conversion).
+THREE.ColorManagement.enabled = false;
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+const FINE = 121, NM = 31;      // fine grid for the faces; 31 x 31 mesh lines as in the original figure
+const MAX_TRACKS = 6, MAX_POINTS = 2600;
+
+// Round markers with an outline, constant size in pixels (the projection stretches x and y
+// independently, so spheres would turn into ellipses).
+const PVS = `
+attribute float aSize; attribute vec3 aFill; attribute vec3 aStroke; attribute float aStrokeW;
+uniform float uDpr;
+varying vec3 vFill; varying vec3 vStroke; varying float vR; varying float vSW;
+void main() {
+  vFill = aFill; vStroke = aStroke;
+  vR = 0.5 * aSize * uDpr; vSW = aStrokeW * uDpr;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = aSize * uDpr + 2.0;
+}`;
+const PFS = `
+varying vec3 vFill; varying vec3 vStroke; varying float vR; varying float vSW;
+void main() {
+  vec2 p = (gl_PointCoord - 0.5) * (2.0 * vR + 2.0);
+  float d = length(p);
+  float alpha = 1.0 - smoothstep(vR - 0.7, vR + 0.7, d);
+  if (alpha <= 0.001) discard;
+  float inner = 1.0 - smoothstep(vR - vSW - 0.6, vR - vSW + 0.6, d);
+  gl_FragColor = vec4(mix(vStroke, vFill, inner), alpha);
+}`;
+const FACES = [
+  { n: [-1, 0, 0], v: [[0, 0, 0], [0, 1, 0], [0, 1, 1], [0, 0, 1]] },
+  { n: [1, 0, 0], v: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
+  { n: [0, -1, 0], v: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
+  { n: [0, 1, 0], v: [[0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]] },
+  { n: [0, 0, -1], v: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]] },
+  { n: [0, 0, 1], v: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] },
+];
+const rgb = (css) => new THREE.Color(css).toArray();
+
+// A panel = one WebGL canvas with its 2D overlay (ticks) and HTML labels, inside `container`.
+// render(view) draws the loss surface of view.fn and one or more GD-type tracks on it.
+function createPanel(container, opts) {
+  opts = opts || {};
+  const compact = Boolean(opts.compact);
+  const glc = document.createElement("canvas");
+  glc.className = "gl3d";
+  glc.setAttribute("role", "img");
+  glc.setAttribute("aria-label", opts.label || "3D loss surface with the trajectory");
+  const ovc = document.createElement("canvas");
+  ovc.className = "ov3d";
+  ovc.setAttribute("aria-hidden", "true");
+  const lab = document.createElement("div");
+  lab.className = "labels3d" + (compact ? " compact" : "");
+  lab.setAttribute("aria-hidden", "true");
+  lab.style.visibility = "hidden";
+  container.prepend(lab); container.prepend(ovc); container.prepend(glc);
+
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: glc, antialias: true, alpha: true });
+  } catch (err) {
+    const msg = document.createElement("p");
+    msg.className = "fallback";
+    msg.textContent = "This browser does not allow more WebGL views; the map and the charts still work.";
+    container.appendChild(msg);
+    return { render() {}, dispose() {} };
+  }
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  renderer.setPixelRatio(DPR);
+  renderer.setClearColor(0x000000, 0);
+
+  // World = pgfplots' normalised box: x = (w1-a)/(b-a), y = (w2-a)/(b-a), z = (L-floor)/(zmax-floor).
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 20);
+  camera.up.set(0, 0, 1);
+  const staticGroup = new THREE.Group(), dynGroup = new THREE.Group();
+  scene.add(staticGroup, dynGroup);
+  const dir = new THREE.Vector3(0, -1, 0.4).normalize();   // unit vector towards the camera
+
+  const pushedBack = { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 };
+  // Paths and markers are painted on top, without a per-pixel depth test (it cut their edges on
+  // slopes facing the viewer); whether a piece is hidden by a hill is decided by visible().
+  const onTop = { depthTest: false, depthWrite: false };
+  const M = {
+    face: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, ...pushedBack }),
+    floor: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, ...pushedBack }),
+    mesh: new THREE.LineBasicMaterial({ color: 0xa2a8af }),
+    contour: new THREE.LineBasicMaterial({ color: 0x9aafc3 }),
+    box: new THREE.LineBasicMaterial({ color: 0x80868d }),
+    drop: new THREE.LineDashedMaterial({ color: 0x56626f, dashSize: 0.011, gapSize: 0.011 }),
+    head: new THREE.MeshBasicMaterial({ color: 0x1f4e79, side: THREE.DoubleSide, depthWrite: false }),
+    edge: new LineMaterial({ color: 0x5f656c, linewidth: compact ? 1 : 1.25 }),
+    arrow: new LineMaterial({ color: 0x1f4e79, linewidth: compact ? 2 : 2.4, depthWrite: false }),
+  };
+  const lineMats = [M.edge, M.arrow];
+  const W_HALO = compact ? 6.5 : 8, W_EDGE = compact ? 3.8 : 4.8, W_CORE = compact ? 2.4 : 3;
+
+  function makePoints(order) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(MAX_POINTS * 3), 3));
+    g.setAttribute("aSize", new THREE.BufferAttribute(new Float32Array(MAX_POINTS), 1));
+    g.setAttribute("aFill", new THREE.BufferAttribute(new Float32Array(MAX_POINTS * 3), 3));
+    g.setAttribute("aStroke", new THREE.BufferAttribute(new Float32Array(MAX_POINTS * 3), 3));
+    g.setAttribute("aStrokeW", new THREE.BufferAttribute(new Float32Array(MAX_POINTS), 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uDpr: { value: DPR } }, vertexShader: PVS, fragmentShader: PFS,
+      transparent: true, depthTest: false, depthWrite: false,
+    });
+    const pts = new THREE.Points(g, mat);
+    pts.frustumCulled = false; pts.renderOrder = order;
+    dynGroup.add(pts);
+    return pts;
+  }
+  function fillPoints(pts, items) {
+    const A = pts.geometry.attributes, n = Math.min(items.length, A.aSize.count);
+    for (let i = 0; i < n; i++) {
+      const it = items[i];
+      A.position.array.set(it.p, 3 * i);
+      A.aSize.array[i] = it.size;
+      A.aFill.array.set(it.fill, 3 * i);
+      A.aStroke.array.set(it.stroke, 3 * i);
+      A.aStrokeW.array[i] = it.sw;
+    }
+    for (const k of ["position", "aSize", "aFill", "aStroke", "aStrokeW"]) A[k].needsUpdate = true;
+    pts.geometry.setDrawRange(0, n);
+  }
+  function makeLine2(mat, order, group) {
+    const l = new Line2(new LineGeometry(), mat);
+    l.frustumCulled = false; l.renderOrder = order; l.visible = false;
+    (group || dynGroup).add(l);
+    return l;
+  }
+  function setLine2(line, arr) {
+    if (arr.length < 6) { line.visible = false; return; }
+    const g = new LineGeometry();
+    g.setPositions(arr);
+    line.geometry.dispose();
+    line.geometry = g;
+    line.visible = true;
+  }
+  function makeSegs(mat, order) {
+    const l = new LineSegments2(new LineSegmentsGeometry(), mat);
+    l.frustumCulled = false; l.renderOrder = order; l.visible = false;
+    dynGroup.add(l);
+    return l;
+  }
+  function setSegs(obj, pairs) {
+    if (pairs.length < 6) { obj.visible = false; return; }
+    const g = new LineSegmentsGeometry();
+    g.setPositions(pairs);
+    obj.geometry.dispose();
+    obj.geometry = g;
+    obj.visible = true;
+  }
+  function makeDashed(mat, order) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+    g.setAttribute("lineDistance", new THREE.BufferAttribute(new Float32Array(2), 1));
+    const l = new THREE.Line(g, mat);
+    l.frustumCulled = false; l.renderOrder = order; l.visible = false;
+    dynGroup.add(l);
+    return l;
+  }
+  function setSeg(line, a, b) {
+    const g = line.geometry;
+    g.attributes.position.array.set([a[0], a[1], a[2], b[0], b[1], b[2]]);
+    g.attributes.lineDistance.array[1] = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    g.attributes.position.needsUpdate = true;
+    g.attributes.lineDistance.needsUpdate = true;
+    line.visible = true;
+  }
+
+  // per track: floor halo/core (3-4), path halo/outline/core (5-7), dashed drop line of the moving point
+  const trackObjs = [];
+  for (let i = 0; i < MAX_TRACKS; i++) {
+    const mats = {
+      fHalo: new LineMaterial({ color: 0xffffff, linewidth: compact ? 3.8 : 4.6, ...onTop }),
+      fCore: new LineMaterial({ color: 0xd96c00, linewidth: compact ? 1.5 : 1.8, ...onTop }),
+      halo: new LineMaterial({ color: 0xffffff, linewidth: W_HALO, ...onTop }),
+      edge: new LineMaterial({ color: 0x6e3400, linewidth: W_EDGE, ...onTop }),
+      core: new LineMaterial({ color: 0xd96c00, linewidth: W_CORE, ...onTop }),
+      drop: new THREE.LineDashedMaterial({ color: 0xd96c00, dashSize: 0.011, gapSize: 0.009 }),
+    };
+    lineMats.push(mats.fHalo, mats.fCore, mats.halo, mats.edge, mats.core);
+    trackObjs.push({
+      mats,
+      fHalo: makeSegs(mats.fHalo, 3), fCore: makeSegs(mats.fCore, 4),
+      halo: makeSegs(mats.halo, 5 + i * 0.01), edge: makeSegs(mats.edge, 6 + i * 0.01), core: makeSegs(mats.core, 7 + i * 0.01),
+      drop: makeDashed(mats.drop, 2),
+    });
+  }
+  const arrowLine = makeLine2(M.arrow, 4);
+  const headGeo = new THREE.BufferGeometry();
+  headGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+  const head = new THREE.Mesh(headGeo, M.head);
+  head.frustumCulled = false; head.renderOrder = 4; head.visible = false;
+  dynGroup.add(head);
+  const floorPts = makePoints(8), surfPts = makePoints(9);
+  const dropWs = makeDashed(M.drop, 2), dropW0 = makeDashed(M.drop, 2);
+
+  // ---------------------------------------------------------------- state of this panel
+  let W = 0, H = 0, lastW = 0, lastH = 0, staticKey = "", camKey = "", shown = false;
+  let meshLines = null, contourLines = null, boxLines = null;
+  let V = null;                 // current view
+  const OV = { w1: [0, 0], w2: [0, 0], L: [0, 0] };
+  const VC = { key: "", tracks: [] };
+  const ro = new ResizeObserver(() => {
+    const r = container.getBoundingClientRect();
+    W = Math.round(r.width); H = Math.round(r.height);
+    if (opts.onResize) opts.onResize();
+  });
+  ro.observe(container);
+
+  const LB = {};
+  for (const [k, tex, html, cls] of [
+    ["w0", "w^{(0)}", "<i>w</i><sup>(0)</sup>", "lbl halo"],
+    ["ws", "w^{*}", "<i>w</i><sup>*</sup>", "lbl halo"],
+    ["w1", "w_1", "<i>w</i><sub>1</sub>", "lbl"],
+    ["w2", "w_2", "<i>w</i><sub>2</sub>", "lbl"],
+    ["L", "\J(w)", "J(<i>w</i>)", "lbl"],
+  ]) {
+    const el = document.createElement("span");
+    el.className = cls;
+    el.dataset.tex = tex;
+    el.innerHTML = html;
+    lab.appendChild(el);
+    LB[k] = el;
+  }
+  if (APP.typeset) APP.typeset(Object.values(LB));
+
+  function nrm() {
+    const fn = V.fn, P = V.prep, a = fn.domain[0], span = fn.domain[1] - a, zr = P.zmaxBox - fn.floor;
+    return { X: (w) => (w - a) / span, Z: (L) => (L - fn.floor) / zr, a, span, zr };
+  }
+
+  function buildStatic() {
+    for (const o of [...staticGroup.children]) { staticGroup.remove(o); if (o.geometry) o.geometry.dispose(); }
+    const fn = V.fn, P = V.prep, th = APP.theme, { Z, a, span } = nrm();
+    const N = FINE, pos = new Float32Array(N * N * 3), col = new Float32Array(N * N * 3);
+    const lo = new THREE.Color(th.faceLo), hi = new THREE.Color(th.faceHi), c = new THREE.Color();
+    const smax = Math.sqrt(Math.max(1e-12, P.zmax - P.Lstar));
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const k = j * N + i, L = fn.loss(a + (span * i) / (N - 1), a + (span * j) / (N - 1));
+      pos[3 * k] = i / (N - 1); pos[3 * k + 1] = j / (N - 1); pos[3 * k + 2] = Z(L);
+      c.lerpColors(lo, hi, Math.min(1, Math.sqrt(Math.max(0, L - P.Lstar)) / smax));
+      col[3 * k] = c.r; col[3 * k + 1] = c.g; col[3 * k + 2] = c.b;
+    }
+    const idx = new Uint32Array((N - 1) * (N - 1) * 6);
+    let q = 0;
+    for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) {
+      const k = j * N + i;
+      idx[q++] = k; idx[q++] = k + 1; idx[q++] = k + N + 1;
+      idx[q++] = k; idx[q++] = k + N + 1; idx[q++] = k + N;
+    }
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    sg.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    sg.setIndex(new THREE.BufferAttribute(idx, 1));
+    const surface = new THREE.Mesh(sg, M.face);
+    surface.renderOrder = 1;
+    staticGroup.add(surface);
+    // mesh lines: rows and columns of the 31 x 31 grid, sampled on the fine grid (step 4)
+    const st = (N - 1) / (NM - 1), mp = [];
+    const seg = (k1, k2) => mp.push(pos[3 * k1], pos[3 * k1 + 1], pos[3 * k1 + 2], pos[3 * k2], pos[3 * k2 + 1], pos[3 * k2 + 2]);
+    for (let l = 0; l < NM; l++) {
+      const r = l * st;
+      for (let i = 0; i < N - 1; i++) seg(r * N + i, r * N + i + 1);
+      for (let j = 0; j < N - 1; j++) seg(j * N + r, (j + 1) * N + r);
+    }
+    const mg = new THREE.BufferGeometry();
+    mg.setAttribute("position", new THREE.Float32BufferAttribute(mp, 3));
+    meshLines = new THREE.LineSegments(mg, M.mesh);
+    meshLines.renderOrder = 2;
+    staticGroup.add(meshLines);
+    for (const f of [(s) => s, (s) => (N - 1) * N + s, (s) => s * N, (s) => s * N + N - 1]) {
+      const arr = [];
+      for (let s = 0; s < N; s++) { const k = f(s); arr.push(pos[3 * k], pos[3 * k + 1], pos[3 * k + 2]); }
+      setLine2(makeLine2(M.edge, 2, staticGroup), arr);
+    }
+    const floorPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0), M.floor);
+    floorPlane.renderOrder = 0;
+    staticGroup.add(floorPlane);
+    const s = P.segs, cp = new Float32Array((s.length / 4) * 6);
+    for (let i = 0, o = 0; i < s.length; i += 4, o += 6) {
+      cp[o] = (s[i] - a) / span; cp[o + 1] = (s[i + 1] - a) / span; cp[o + 2] = 0;
+      cp[o + 3] = (s[i + 2] - a) / span; cp[o + 4] = (s[i + 3] - a) / span; cp[o + 5] = 0;
+    }
+    const cg = new THREE.BufferGeometry();
+    cg.setAttribute("position", new THREE.BufferAttribute(cp, 3));
+    contourLines = new THREE.LineSegments(cg, M.contour);
+    contourLines.renderOrder = 1;
+    staticGroup.add(contourLines);
+    const bg = new THREE.BufferGeometry();
+    bg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(12 * 6), 3));
+    boxLines = new THREE.LineSegments(bg, M.box);
+    boxLines.frustumCulled = false; boxLines.renderOrder = 0;
+    staticGroup.add(boxLines);
+    camKey = "";
+  }
+  function applyTheme() {
+    const th = APP.theme;
+    M.floor.color.set(th.floor); M.mesh.color.set(th.mesh); M.contour.color.set(th.contour); M.box.color.set(th.box);
+    M.drop.color.set(th.ink2); M.head.color.set(th.blue); M.edge.color.set(th.edge); M.arrow.color.set(th.blue);
+  }
+
+  // ---------------------------------------------------------------- camera = pgfplots view={h}{v}
+  function updateBox() {
+    if (!boxLines) return;
+    const seen = new Set(), out = [];
+    for (const F of FACES) {
+      if (F.n[0] * dir.x + F.n[1] * dir.y + F.n[2] * dir.z >= 0) continue;   // front face: not drawn
+      for (let i = 0; i < 4; i++) {
+        const p = F.v[i], q = F.v[(i + 1) % 4], key = [p.join(), q.join()].sort().join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(...p, ...q);
+      }
+    }
+    const attr = boxLines.geometry.attributes.position;
+    attr.array.fill(0); attr.array.set(out); attr.needsUpdate = true;
+    boxLines.geometry.setDrawRange(0, out.length / 3);
+  }
+  // Camera basis: right = (cos h, sin h, 0), up = d x right, d = (sin h cos v, -cos h cos v, sin v).
+  // As in pgfplots, the projected box is stretched to fill the drawing area in x and in y separately.
+  function fitCamera() {
+    const h = V.h * DEG, v = V.v * DEG;
+    dir.set(Math.sin(h) * Math.cos(v), -Math.cos(h) * Math.cos(v), Math.sin(v));
+    const r = new THREE.Vector3(Math.cos(h), Math.sin(h), 0), u = new THREE.Vector3().crossVectors(dir, r);
+    camera.position.set(0.5, 0.5, 0.5).addScaledVector(dir, 5);
+    camera.lookAt(0.5, 0.5, 0.5);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const p = new THREE.Vector3();
+    for (let i = 0; i < 8; i++) {
+      p.set((i & 1) - 0.5, ((i >> 1) & 1) - 0.5, ((i >> 2) & 1) - 0.5);
+      const X = p.dot(r), Y = p.dot(u);
+      x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y);
+    }
+    const k = Math.min(1, W / 760);
+    const m = { l: Math.max(18 + 64 * k, compact ? 68 : 0), r: 12 + 26 * k, t: 8 + 14 * k, b: Math.max(16 + 50 * k, compact ? 46 : 0) };
+    const ux = (x1 - x0) / Math.max(40, W - m.l - m.r), uy = (y1 - y0) / Math.max(40, H - m.t - m.b);
+    const L = x0 - m.l * ux, R = x1 + m.r * ux, B = y0 - m.b * uy, T = y1 + m.t * uy;
+    const cx = (L + R) / 2, cy = (B + T) / 2, z = V.zoom;
+    camera.left = cx + (L - cx) / z; camera.right = cx + (R - cx) / z;
+    camera.bottom = cy + (B - cy) / z; camera.top = cy + (T - cy) / z;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    updateBox();
+  }
+  const _v = new THREE.Vector3();
+  function proj(x, y, z) {
+    _v.set(x, y, z).project(camera);
+    return [((_v.x + 1) / 2) * W, ((1 - _v.y) / 2) * H];
+  }
+  function outward(a, b, c, dist) {
+    const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    let nx = -(b[1] - a[1]), ny = b[0] - a[0];
+    const l = Math.hypot(nx, ny) || 1;
+    nx /= l; ny /= l;
+    if ((m[0] - c[0]) * nx + (m[1] - c[1]) * ny < 0) { nx = -nx; ny = -ny; }
+    return [m[0] + nx * dist, m[1] + ny * dist];
+  }
+
+  // ---------------------------------------------------------------- occlusion by the surface
+  // The surface is an opaque sheet over the domain. A point is hidden when its line of sight to the
+  // camera crosses the sheet: for a point on the surface, when the line goes under the sheet; for a
+  // point on the floor (always under the sheet), when it comes out above the sheet before leaving
+  // the box sideways. Marching over the true loss (orthographic view: the line is parallel to dir).
+  function visible(x, y, z, onSurface) {
+    const fn = V.fn, { a, span, zr } = nrm();
+    let under = null;
+    for (let s = 0.012; s < 3; s += 0.006) {
+      const px = x + dir.x * s, py = y + dir.y * s, pz = z + dir.z * s;
+      if (px < 0 || px > 1 || py < 0 || py > 1 || pz > 1.01) return true;
+      const u = pz < (fn.loss(a + px * span, a + py * span) - fn.floor) / zr - 0.002;
+      if (under === null) {
+        if (onSurface && u) return false;
+        under = u;
+      } else if (u !== under) {
+        return false;
+      }
+    }
+    return true;
+  }
+  // Visible sub-pieces of a straight piece of path: endpoints are tested once (cached); longer pieces
+  // are also sampled every ~5 px on screen.
+  function chord(p, q, vp, vq, onSurface) {
+    const A = proj(p[0], p[1], p[2]), B = proj(q[0], q[1], q[2]), len = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    if (len <= 8) return [{ s: p, v: vp }, { s: q, v: vq }];
+    const n = Math.min(48, Math.ceil(len / 5)), out = [{ s: p, v: vp }];
+    for (let i = 1; i < n; i++) {
+      const t = i / n, s = [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
+      out.push({ s, v: visible(s[0], s[1], s[2], onSurface) });
+    }
+    out.push({ s: q, v: vq });
+    return out;
+  }
+  function pushPairs(samples, pairs) {
+    for (let i = 1; i < samples.length; i++) {
+      const a = samples[i - 1], b = samples[i];
+      if (a.v && b.v) pairs.push(a.s[0], a.s[1], a.s[2], b.s[0], b.s[1], b.s[2]);
+    }
+  }
+
+  // ---------------------------------------------------------------- ticks and axis labels
+  function drawOverlay() {
+    const ctx = ovc.getContext("2d");
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const th = APP.theme, fn = V.fn, { X, Z } = nrm(), k = Math.min(1, W / 760), fs = Math.round(11 + 3.5 * k);
+    const corners = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    let front = corners[0], best = -Infinity, left = corners[0], lx = Infinity;
+    for (const c of corners) {
+      const s = (c[0] - 0.5) * dir.x + (c[1] - 0.5) * dir.y;
+      if (s > best) { best = s; front = c; }
+      const p = proj(c[0], c[1], 0);
+      if (p[0] < lx) { lx = p[0]; left = c; }
+    }
+    ctx.lineWidth = 1; ctx.strokeStyle = th.box; ctx.fillStyle = th.ink;
+    ctx.font = fs + 'px "STIX Two Text", "Times New Roman", serif';
+    const tick = (p, dx, dy) => { ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(p[0] + dx, p[1] + dy); ctx.stroke(); };
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (const tv of fn.wticks) { const p = proj(X(tv), front[1], 0); tick(p, 0, 5); ctx.fillText(String(tv), p[0], p[1] + 7); }
+    for (const tv of fn.wticks) { const p = proj(front[0], X(tv), 0); tick(p, 0, 5); ctx.fillText(String(tv), p[0], p[1] + 7); }
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    let maxw = 0;
+    for (const tv of fn.zticks) {
+      const p = proj(left[0], left[1], Z(tv));
+      tick(p, -5, 0);
+      ctx.fillText(String(tv), p[0] - 8, p[1]);
+      maxw = Math.max(maxw, ctx.measureText(String(tv)).width);
+    }
+    const ctr = proj(0.5, 0.5, 0), off = 16 + 14 * k + fs;
+    OV.w1 = outward(proj(0, front[1], 0), proj(1, front[1], 0), ctr, off);
+    OV.w2 = outward(proj(front[0], 0, 0), proj(front[0], 1, 0), ctr, off);
+    const zm = proj(left[0], left[1], 0.5);
+    OV.L = [zm[0] - maxw - 14, zm[1]];
+  }
+  function place(el, x, y) { el.style.transform = "translate(" + Math.round(x) + "px," + Math.round(y) + "px)"; }
+  function placeLabels() {
+    const P = V.prep, { X, Z } = nrm(), t0 = V.tracks[0];
+    LB.w0.hidden = !t0;
+    if (t0) {
+      const p0 = proj(X(t0.T[0][0]), X(t0.T[0][1]), Z(t0.L[0]));
+      place(LB.w0, p0[0] - LB.w0.offsetWidth / 2, p0[1] - LB.w0.offsetHeight - 10);
+    }
+    // w* label: on the side opposite to the arrival of the path (reference: the last iterate of the
+    // run that is more than 40 px away on screen), so it does not sit on the final steps
+    const ps = proj(X(P.wstar[0]), X(P.wstar[1]), Z(P.Lstar));
+    let ux = -1, uy = 0;
+    if (t0) {
+      for (let k = t0.T.length - 1; k >= 0; k--) {
+        const q = proj(X(t0.T[k][0]), X(t0.T[k][1]), Z(t0.L[k])), dx = ps[0] - q[0], dy = ps[1] - q[1], d = Math.hypot(dx, dy);
+        if (d > 40) { ux = dx / d; uy = dy / d; break; }
+      }
+    }
+    const lw = LB.ws.offsetWidth, lh = LB.ws.offsetHeight, rr = 9 + 0.5 * Math.hypot(lw * ux, lh * uy);
+    place(LB.ws, ps[0] + ux * rr - lw / 2, ps[1] + uy * rr - lh / 2);
+    place(LB.w1, OV.w1[0] - LB.w1.offsetWidth / 2, OV.w1[1] - LB.w1.offsetHeight / 2);
+    place(LB.w2, OV.w2[0] - LB.w2.offsetWidth / 2, OV.w2[1] - LB.w2.offsetHeight / 2);
+    place(LB.L, OV.L[0] - LB.L.offsetWidth, OV.L[1] - LB.L.offsetHeight / 2);
+  }
+
+  // ---------------------------------------------------------------- tracks (every frame)
+  function updateTracks() {
+    const P = V.prep, th = APP.theme, { X, Z } = nrm(), floorOn = V.showFloor;
+    const key = [V.runKey, V.fnKey, V.h.toFixed(2), V.v.toFixed(2), V.zoom.toFixed(3), W, H].join("|");
+    if (VC.key !== key) { VC.key = key; VC.tracks = []; VC.ws = null; }
+    M.arrow.color.set(V.arrowColor || th.blue);
+    M.head.color.set(V.arrowColor || th.blue);
+    const cP = rgb(th.plate), cF = rgb(th.starFill), cI = rgb(th.ink);
+    const wsS = [X(P.wstar[0]), X(P.wstar[1]), Z(P.Lstar)], wsF = [wsS[0], wsS[1], 0];
+    if (!VC.ws) VC.ws = [visible(...wsS, true), visible(...wsF, false)];
+    const si = [], fl = [], curS = [], curF = [];
+    if (VC.ws[0]) si.push({ p: wsS, size: compact ? 10 : 11, fill: cF, stroke: cI, sw: 1.6 });
+    if (VC.ws[1] && floorOn) fl.push({ p: wsF, size: compact ? 7 : 8, fill: cF, stroke: cI, sw: 1.3 });
+    let arrowDone = false;
+    for (let i = 0; i < MAX_TRACKS; i++) {
+      const o = trackObjs[i], tr = V.tracks[i];
+      if (!tr) {
+        o.fHalo.visible = o.fCore.visible = o.halo.visible = o.edge.visible = o.core.visible = o.drop.visible = false;
+        continue;
+      }
+      if (!VC.tracks[i]) VC.tracks[i] = { ps: [], pf: [], cs: [], cf: [] };
+      const C = VC.tracks[i];
+      o.mats.core.color.set(tr.color); o.mats.edge.color.set(tr.edge); o.mats.fCore.color.set(tr.color);
+      o.mats.halo.color.set(th.face); o.mats.fHalo.color.set(th.floor); o.mats.drop.color.set(tr.color);
+      const cA = rgb(tr.color), cS = rgb(tr.edge);
+      const onS = (k) => [X(tr.T[k][0]), X(tr.T[k][1]), Z(tr.L[k])];
+      const onF = (k) => [X(tr.T[k][0]), X(tr.T[k][1]), 0];
+      const visS = (k) => (C.ps[k] === undefined ? (C.ps[k] = visible(...onS(k), true)) : C.ps[k]);
+      const visF = (k) => (C.pf[k] === undefined ? (C.pf[k] = visible(...onF(k), false)) : C.pf[k]);
+      const pairsS = [], pairsF = [];
+      for (let k = 0; k < tr.t; k++) {
+        if (!C.cs[k]) C.cs[k] = chord(onS(k), onS(k + 1), visS(k), visS(k + 1), true);
+        pushPairs(C.cs[k], pairsS);
+        if (floorOn) {
+          if (!C.cf[k]) C.cf[k] = chord(onF(k), onF(k + 1), visF(k), visF(k + 1), false);
+          pushPairs(C.cf[k], pairsF);
+        }
+      }
+      const cur = [X(tr.cur[0]), X(tr.cur[1]), Z(tr.curL)], cfl = [cur[0], cur[1], 0];
+      const vCur = visible(...cur, true), vCurF = floorOn ? visible(...cfl, false) : false;
+      if (tr.m > 0) {
+        pushPairs(chord(onS(tr.t), cur, visS(tr.t), vCur, true), pairsS);
+        if (floorOn) pushPairs(chord(onF(tr.t), cfl, visF(tr.t), vCurF, false), pairsF);
+      }
+      setSegs(o.halo, pairsS); setSegs(o.edge, pairsS); setSegs(o.core, pairsS);
+      o.fHalo.visible = o.fCore.visible = false;
+      if (floorOn) { setSegs(o.fHalo, pairsF); setSegs(o.fCore, pairsF); }
+      for (let k = 0; k <= tr.t; k++) {
+        if (visS(k)) si.push({ p: onS(k), size: k === 0 ? (compact ? 6.6 : 7.8) : (compact ? 5.6 : 6.8), fill: cA, stroke: cS, sw: 1.1 });
+        if (floorOn && visF(k)) fl.push({ p: onF(k), size: compact ? 4 : 4.8, fill: cA, stroke: cS, sw: 0.8 });
+      }
+      if (vCur) curS.push({ p: cur, size: compact ? 11.5 : 13.5, fill: cA, stroke: cP, sw: 2.4 });
+      if (vCurF) curF.push({ p: cfl, size: compact ? 7.5 : 8.5, fill: cA, stroke: cP, sw: 1.7 });
+      o.drop.visible = false;
+      if (floorOn) setSeg(o.drop, cfl, cur);
+      // step vector on the floor (first track that asks for it)
+      if (!arrowDone && tr.arrowK > 0 && floorOn && V.showArrow && tr.t < tr.T.length - 1) {
+        arrowDone = true;
+        const e = 0.02, Bz = (x, y) => [x + dir.x * e, y + dir.y * e, dir.z * e];
+        const A = tr.T[tr.t], N = tr.T[tr.t + 1];
+        const dx = X(N[0]) - X(A[0]), dy = X(N[1]) - X(A[1]), full = Math.hypot(dx, dy), len = full * tr.arrowK;
+        if (len > 0.004) {
+          const ux = dx / full, uy = dy / full, sx = X(A[0]), sy = X(A[1]), ex = sx + ux * len, ey = sy + uy * len;
+          const hs = Math.min(0.03, 0.45 * len), hw = 0.5 * hs;
+          setLine2(arrowLine, [...Bz(sx, sy), ...Bz(ex - ux * hs * 0.85, ey - uy * hs * 0.85)]);
+          const hp = head.geometry.attributes.position;
+          hp.array.set([...Bz(ex, ey), ...Bz(ex - ux * hs - uy * hw, ey - uy * hs + ux * hw), ...Bz(ex - ux * hs + uy * hw, ey - uy * hs - ux * hw)]);
+          hp.needsUpdate = true;
+          head.visible = true;
+        } else { arrowLine.visible = false; head.visible = false; }
+      }
+    }
+    if (!arrowDone) { arrowLine.visible = false; head.visible = false; }
+    fillPoints(surfPts, si.concat(curS));
+    floorPts.visible = floorOn;
+    if (floorOn) fillPoints(floorPts, fl.concat(curF));
+    dropWs.visible = dropW0.visible = false;
+    if (floorOn) {
+      setSeg(dropWs, wsF, wsS);
+      const t0 = V.tracks[0];
+      if (t0) { const x0 = X(t0.T[0][0]), y0 = X(t0.T[0][1]); setSeg(dropW0, [x0, y0, 0], [x0, y0, Z(t0.L[0])]); }
+    }
+  }
+
+  function render(view) {
+    V = view;
+    if (!W || !H || !V || !V.prep) return;
+    if (W !== lastW || H !== lastH) {
+      renderer.setSize(W, H, false);
+      for (const m of lineMats) m.resolution.set(W, H);
+      ovc.width = Math.round(W * DPR); ovc.height = Math.round(H * DPR);
+      lastW = W; lastH = H; camKey = "";
+    }
+    const sk = V.fnKey + "|" + V.themeVersion;
+    if (sk !== staticKey) { staticKey = sk; applyTheme(); buildStatic(); }
+    const shaded = V.style === "shaded";
+    if (M.face.vertexColors !== shaded) { M.face.vertexColors = shaded; M.face.needsUpdate = true; }
+    M.face.color.set(shaded ? 0xffffff : APP.theme.face);
+    const ck = [V.h, V.v, V.zoom, W, H, V.fnKey, V.themeVersion].join("|");
+    if (ck !== camKey) { camKey = ck; fitCamera(); drawOverlay(); }
+    meshLines.visible = V.showMesh;
+    contourLines.visible = V.showFloor;
+    updateTracks();
+    renderer.render(scene, camera);
+    placeLabels();
+    if (!shown) { shown = true; lab.style.visibility = "visible"; if (opts.onShown) opts.onShown(); }
+  }
+
+  // ---------------------------------------------------------------- rotate and zoom
+  let drag = null;
+  glc.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0 || !V) return;
+    drag = { x: ev.clientX, y: ev.clientY, h: V.h, v: V.v };
+    glc.setPointerCapture(ev.pointerId);
+    container.classList.add("dragging");
+    if (opts.onInteract) opts.onInteract();
+  });
+  glc.addEventListener("pointermove", (ev) => {
+    if (!drag || !opts.onView) return;
+    opts.onView(drag.h - (ev.clientX - drag.x) * 0.35, Math.min(85, Math.max(4, drag.v + (ev.clientY - drag.y) * 0.25)));
+  });
+  const endDrag = () => { drag = null; container.classList.remove("dragging"); };
+  glc.addEventListener("pointerup", endDrag);
+  glc.addEventListener("pointercancel", endDrag);
+  glc.addEventListener("wheel", (ev) => {
+    if (!ev.ctrlKey && !ev.metaKey) return;          // plain wheel keeps scrolling the page
+    ev.preventDefault();
+    if (opts.onZoom) opts.onZoom(Math.exp(-ev.deltaY * 0.002));
+    if (opts.onInteract) opts.onInteract();
+  }, { passive: false });
+  glc.addEventListener("dblclick", () => { if (opts.onReset) opts.onReset(); });
+
+  function dispose() {
+    ro.disconnect();
+    try { renderer.forceContextLoss(); } catch (err) { /* context already gone */ }
+    renderer.dispose();
+  }
+  return { render, dispose };
+}
+
+window.GDPanel = createPanel;
+window.dispatchEvent(new Event("gdpanel-ready"));
+</script>
+
+</body></html>
