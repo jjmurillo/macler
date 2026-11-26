@@ -340,8 +340,9 @@ mjx-container{color:inherit}
             <label for="hpRho"><span class="sym">ρ <small>RMSProp</small></span><input type="number" id="hpRho" min="0.5" max="0.999" step="0.01" value="0.99"></label>
             <label for="hpB1"><span class="sym">β<sub>1</sub> <small>Adam</small></span><input type="number" id="hpB1" min="0" max="0.999" step="0.05" value="0.9"></label>
             <label for="hpB2"><span class="sym">β<sub>2</sub> <small>Adam</small></span><input type="number" id="hpB2" min="0.5" max="0.9999" step="0.001" value="0.999"></label>
-            <label for="hpSigma"><span class="sym">σ <small>SGD noise</small></span><input type="number" id="hpSigma" min="0" max="10" step="0.5" value="2"></label>
-            <label for="hpEtaSgd"><span class="sym">α <small>SGD (not tuned)</small></span><input type="number" id="hpEtaSgd" min="0.001" max="0.2" step="0.005" value="0.02"></label>
+            <label for="hpBatch"><span class="sym">B <small>SGD batch size (of 20)</small></span><input type="number" id="hpBatch" min="1" max="20" step="1" value="1"></label>
+            <label for="hpSigma"><span class="sym">σ <small>SGD residual size</small></span><input type="number" id="hpSigma" min="0" max="5" step="0.25" value="0.5"></label>
+            <label for="hpEtaSgd"><span class="sym">α <small>SGD (not tuned)</small></span><input type="number" id="hpEtaSgd" min="0.001" max="0.2" step="0.005" value="0.05"></label>
           </div>
           <p class="note" id="hpNote">With “All tuned”, μ, ρ, β<sub>1</sub> and β<sub>2</sub> are chosen on the grid; the values here are only used for the empty circles of “Who gets there first?”.</p>
         </fieldset>
@@ -361,7 +362,7 @@ mjx-container{color:inherit}
     </aside>
   </main>
 
-  <p class="foot">The iterates are computed in the browser with a fixed α, stopping when ‖<i>w</i><sup>(t+1)</sup> − <i>w</i><sup>(t)</sup>‖ &lt; 10<sup>−4</sup>. The optimizers in the comparison follow the PyTorch update rules (SGD with momentum and Nesterov, RMSprop and Adam), and their trajectories match <code>torch.optim</code> to machine precision; in the comparison there is no stopping rule, but a common horizon of K steps. The example function is adapted from F. Fleuret, <i>The Little Book of Deep Learning</i> (2023), Fig. 3.2, CC BY-NC-SA 4.0. “Curved valley” and “Narrow valley” are original example functions. Keyboard: space plays or pauses, ← → move one step, Home and End jump to the ends.</p>
+  <p class="foot">The iterates are computed in the browser with a fixed α, stopping when ‖<i>w</i><sup>(t+1)</sup> − <i>w</i><sup>(t)</sup>‖ &lt; 10<sup>−4</sup>. The optimizers in the comparison follow the PyTorch update rules (SGD with momentum and Nesterov, RMSprop and Adam), and their trajectories match <code>torch.optim</code> to machine precision. For SGD the loss is the mean of m = 20 per-sample losses, J = (1/m) Σ J<sub>i</sub>: in every epoch the samples are shuffled and visited in mini-batches of B, and each step uses only the gradient of its batch (one step is one batch; an epoch is m/B steps). In the narrow valley each J<sub>i</sub> is the squared error of one sample of a linear regression, with residuals of size σ at the minimum; in the other two functions each sample adds to J a fixed linear term with zero mean, so the mean of the J<sub>i</sub> is still the function shown. With B = 20 SGD is gradient descent; with σ = 0 all the samples agree at the minimum and SGD converges to it; in the comparison there is no stopping rule, but a common horizon of K steps. The example function is adapted from F. Fleuret, <i>The Little Book of Deep Learning</i> (2023), Fig. 3.2, CC BY-NC-SA 4.0. “Curved valley” and “Narrow valley” are original example functions. Keyboard: space plays or pauses, ← → move one step, Home and End jump to the ends.</p>
 </div>
 
 <script>
@@ -442,7 +443,7 @@ window.MathJax = {
       floor: -16, views: [[22, 30]], zticks: [0, 20, 40], wticks: [1, 3, 5],
     },
     estrecho: {
-      key: "estrecho", domain: [0, 6], loss: lossNarrow, grad: gradNarrow,
+      key: "estrecho", domain: [0, 6], loss: lossNarrow, grad: gradNarrow, regression: true,
       w0: [Math.round(NV_W0[0] * 1e4) / 1e4, Math.round(NV_W0[1] * 1e4) / 1e4], eta: 0.2, etas: [0.05, 0.2, 0.32, 0.34],
       guess: [NV.cx, NV.cy], floor: -20, views: [[60, 35], [260, 30]], zticks: [0, 20, 40, 60], wticks: [1, 3, 5],
     },
@@ -576,20 +577,25 @@ window.MathJax = {
     nesterov: { name: "Nesterov", short: "Nesterov", hp: ["eta", "mu"] },
     rmsprop: { name: "RMSProp", short: "RMSProp", hp: ["eta", "rho"] },
     adam: { name: "Adam", short: "Adam", hp: ["eta", "b1", "b2"] },
-    sgd: { name: "SGD (simulated noise)", short: "SGD", hp: ["eta", "sigma"] },
+    sgd: { name: "SGD (shuffled samples)", short: "SGD", hp: ["eta", "batch", "sigma"] },
   };
   const EPS = 1e-8;
 
-  // Seeded Gaussian noise (mulberry32 + polar Box-Muller), so a noisy run is reproducible.
-  function gaussian(seed) {
-    let a = seed >>> 0, spare = null;
-    const uni = () => {
+  // Seeded uniform generator (mulberry32), so every random choice is reproducible.
+  function uniform(seed) {
+    let a = seed >>> 0;
+    return () => {
       a = (a + 0x6D2B79F5) >>> 0;
       let t = a;
       t = Math.imul(t ^ (t >>> 15), t | 1);
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+  }
+  // Seeded Gaussian generator (polar Box-Muller).
+  function gaussian(seed) {
+    const uni = uniform(seed);
+    let spare = null;
     return () => {
       if (spare !== null) { const s = spare; spare = null; return s; }
       let x, y, r;
@@ -600,15 +606,84 @@ window.MathJax = {
     };
   }
 
+  // ------------------------------------------------------------------ samples for SGD
+  // J is written as the mean of m = 20 per-sample losses, J(w) = (1/m) sum_i J_i(w), d = w - w*.
+  // Inputs x_i with (1/m) sum x_i x_i' = H (the Hessian of J at w*) and residuals e_i with
+  // sum e_i x_i = 0 and mean square 1, scaled by sigma at run time.
+  //  - Narrow valley (a quadratic, J = d'Hd/2): J_i(w) = (1/2)(x_i'd - sigma e_i)^2 - sigma^2/2, the
+  //    squared error of one sample of a linear regression whose least-squares solution is w*.
+  //  - Other functions: J_i(w) = J(w) - sigma e_i x_i'd, a fixed linear term per sample with zero mean
+  //    (a full quadratic term per sample would make the gradients explode far from w*).
+  // In both cases the mean of the J_i is the function drawn and w* does not move.
+  const M_SAMPLES = 20;
+  function samples(fn) {
+    if (fn._samples) return fn._samples;
+    const opt = minimise(fn, fn.guess), H = hessian(fn, opt.w), uni = uniform(20261126), g = gaussian(1126), M = M_SAMPLES;
+    // balanced design: one direction every 360/m degrees, slightly jittered radii, then whitened so
+    // that (1/m) sum z z' = I exactly (Cholesky factor of the empirical second moment)
+    const Z = [];
+    for (let i = 0; i < M; i++) { const t = 2 * Math.PI * (i + 0.5 * uni()) / M, r = 1 + 0.5 * uni(); Z.push([r * Math.cos(t), r * Math.sin(t)]); }
+    let s00 = 0, s01 = 0, s11 = 0;
+    for (const z of Z) { s00 += z[0] * z[0] / M; s01 += z[0] * z[1] / M; s11 += z[1] * z[1] / M; }
+    const l00 = Math.sqrt(s00), l10 = s01 / l00, l11 = Math.sqrt(s11 - l10 * l10);
+    for (const z of Z) { const a = z[0] / l00; z[1] = (z[1] - l10 * a) / l11; z[0] = a; }
+    // x = H^(1/2) z, with the symmetric square root
+    const tr = H[0] + H[3], det = H[0] * H[3] - H[1] * H[2], disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+    const lam = [tr / 2 + disc, tr / 2 - disc];
+    let v1 = Math.abs(H[1]) > 1e-12 ? [lam[0] - H[3], H[1]] : (H[0] >= H[3] ? [1, 0] : [0, 1]);
+    const nv = Math.hypot(v1[0], v1[1]); v1 = [v1[0] / nv, v1[1] / nv];
+    const v2 = [-v1[1], v1[0]], r1 = Math.sqrt(Math.max(lam[0], 0)), r2 = Math.sqrt(Math.max(lam[1], 0));
+    const R = [r1 * v1[0] * v1[0] + r2 * v2[0] * v2[0], r1 * v1[0] * v1[1] + r2 * v2[0] * v2[1], 0, 0];
+    R[2] = R[1]; R[3] = r1 * v1[1] * v1[1] + r2 * v2[1] * v2[1];
+    const X = Z.map((z) => [R[0] * z[0] + R[1] * z[1], R[2] * z[0] + R[3] * z[1]]);
+    // residuals orthogonal to the inputs, mean square 1
+    let e = X.map(() => g());
+    const Hm = [0, 0, 0], b = [0, 0];
+    X.forEach((x, i) => { Hm[0] += x[0] * x[0]; Hm[1] += x[0] * x[1]; Hm[2] += x[1] * x[1]; b[0] += x[0] * e[i]; b[1] += x[1] * e[i]; });
+    const dt = Hm[0] * Hm[2] - Hm[1] * Hm[1], c = [(Hm[2] * b[0] - Hm[1] * b[1]) / dt, (Hm[0] * b[1] - Hm[1] * b[0]) / dt];
+    e = e.map((ei, i) => ei - X[i][0] * c[0] - X[i][1] * c[1]);
+    const rms = Math.sqrt(e.reduce((acc, ei) => acc + ei * ei, 0) / M);
+    e = e.map((ei) => ei / rms);
+    fn._samples = { M, X, e, H, wstar: opt.w };
+    return fn._samples;
+  }
+  // Gradient of the mini-batch loss J_B = (1/|B|) sum_{i in B} J_i at w (residuals scaled by sigma).
+  function batchGrad(fn, w, idx, sigma) {
+    const D = samples(fn), d = [w[0] - D.wstar[0], w[1] - D.wstar[1]];
+    let sx = 0, sy = 0;
+    if (fn.regression) {
+      for (const i of idx) { const x = D.X[i], r = x[0] * d[0] + x[1] * d[1] - sigma * D.e[i]; sx += r * x[0]; sy += r * x[1]; }
+      return [sx / idx.length, sy / idx.length];
+    }
+    const g = fn.grad(w[0], w[1]);
+    for (const i of idx) { const x = D.X[i]; sx += sigma * D.e[i] * x[0]; sy += sigma * D.e[i] * x[1]; }
+    return [g[0] - sx / idx.length, g[1] - sy / idx.length];
+  }
+  // Mini-batches of an epoch: a random permutation of the M samples (Fisher-Yates), cut into batches
+  // of size B (the last one smaller if B does not divide M). A new permutation every epoch.
+  function batcher(M, B, seed) {
+    const uni = uniform(seed || 1);
+    let order = [], pos = M;
+    return () => {
+      if (pos >= M) {
+        order = Array.from({ length: M }, (_, i) => i);
+        for (let i = M - 1; i > 0; i--) { const j = Math.floor(uni() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
+        pos = 0;
+      }
+      const idx = order.slice(pos, pos + B);
+      pos += B;
+      return idx;
+    };
+  }
+
   // One optimiser as a step function with its own buffers: next(w, k) returns the update for step k
   // (k = 1, 2, ...) at the iterate w. runOpt and assess share it, so the tuned runs and the displayed
   // runs follow exactly the same arithmetic.
   function stepper(fn, kind, hp, seed) {
-    const noise = kind === "sgd" ? gaussian(seed || 1) : null;
+    const nextBatch = kind === "sgd" ? batcher(samples(fn).M, Math.max(1, Math.round(hp.batch || 1)), seed) : null;
     let b = [0, 0], m = [0, 0], v = [0, 0];
     return (w, k) => {
-      let g = fn.grad(w[0], w[1]);
-      if (noise) g = [g[0] + hp.sigma * noise(), g[1] + hp.sigma * noise()];
+      const g = nextBatch ? batchGrad(fn, w, nextBatch(), hp.sigma) : fn.grad(w[0], w[1]);
       if (kind === "momentum" || kind === "nesterov") {
         b = [hp.mu * b[0] + g[0], hp.mu * b[1] + g[1]];
         const q = kind === "nesterov" ? [g[0] + hp.mu * b[0], g[1] + hp.mu * b[1]] : b;
@@ -718,7 +793,8 @@ window.MathJax = {
   }
 
   root.GDCore = { PI, FUNCS, descend, hessian, minimise, makeField, march, prepare, runInfo,
-    OPTIM, ETA_GRID, HP_GRID, THR, K_SHOW, K_LONG, runOpt, firstBelow, settleTime, assess, tune, gaussian };
+    OPTIM, ETA_GRID, HP_GRID, THR, K_SHOW, K_LONG, runOpt, firstBelow, settleTime, assess, tune, gaussian,
+    uniform, M_SAMPLES, samples, batchGrad, batcher };
 })(typeof window !== "undefined" ? window : globalThis);
 /*CORE-END*/
 </script>
@@ -1291,7 +1367,8 @@ window.MathJax = {
     rmsprop: ["s^{(t+1)} = \\rho\\, s^{(t)} + (1-\\rho)\\,\\big(g^{(t)}\\big)^{2}", "w^{(t+1)} = w^{(t)} - \\alpha\\, g^{(t)} / \\big(\\sqrt{s^{(t+1)}} + \\epsilon\\big)"],
     adam: ["m^{(t+1)} = \\beta_1 m^{(t)} + (1-\\beta_1)\\, g^{(t)}", "v^{(t+1)} = \\beta_2 v^{(t)} + (1-\\beta_2)\\,\\big(g^{(t)}\\big)^{2}",
       "\\hat m = m^{(t+1)}/(1-\\beta_1^{\\,t+1}),\\ \\hat v = v^{(t+1)}/(1-\\beta_2^{\\,t+1})", "w^{(t+1)} = w^{(t)} - \\alpha\\, \\hat m / \\big(\\sqrt{\\hat v} + \\epsilon\\big)"],
-    sgd: ["w^{(t+1)} = w^{(t)} - \\alpha\\,\\big(g^{(t)} + \\sigma\\, \\xi^{(t)}\\big),\\ \\xi^{(t)} \\sim \\mathcal{N}(0, I)"],
+    sgd: ["J = \\tfrac{1}{m}\\textstyle\\sum_{i=1}^{m} J_i,\\quad m = 20", "\\mathcal{B}_t:\\ B \\text{ samples, shuffled each epoch}",
+      "w^{(t+1)} = w^{(t)} - \\alpha\\, \\tfrac{1}{|\\mathcal{B}_t|}\\textstyle\\sum_{i\\in\\mathcal{B}_t} \\nabla J_i\\big(w^{(t)}\\big)"],
   };
   // Names inside an English sentence.
   const NAME = { gd: "gradient descent", momentum: "momentum", nesterov: "Nesterov", rmsprop: "RMSProp", adam: "Adam" };
@@ -1300,7 +1377,7 @@ window.MathJax = {
     selected: new Set(["gd", "momentum", "rmsprop", "adam"]),
     preset: "all", etaSame: 0.05,
     etaManual: { gd: 0.05, momentum: 0.005, nesterov: 0.005, rmsprop: 0.05, adam: 0.1 },
-    hp: { mu: 0.9, rho: 0.99, b1: 0.9, b2: 0.999, sigma: 2 }, etaSgd: 0.02,
+    hp: { mu: 0.9, rho: 0.99, b1: 0.9, b2: 0.999, sigma: 0.5, batch: 1 }, etaSgd: 0.05,
     K: "auto", Kused: 150, runs: {}, tuneCache: {}, nMax: 0, runId: 0,
     p: 0, playing: false, speed: 8, holdUntil: 0, acc: 0, dirty: true, started: false,
     cards: {}, panels: {},
@@ -1315,7 +1392,7 @@ window.MathJax = {
     if (kind === "momentum" || kind === "nesterov") return { mu: CS.hp.mu };
     if (kind === "rmsprop") return { rho: CS.hp.rho };
     if (kind === "adam") return { b1: CS.hp.b1, b2: CS.hp.b2 };
-    if (kind === "sgd") return { sigma: CS.hp.sigma };
+    if (kind === "sgd") return { batch: CS.hp.batch, sigma: CS.hp.sigma };
     return {};
   }
   // eta alone (all = false; mu, rho and beta as set in the panel) or eta together with them
@@ -1326,7 +1403,7 @@ window.MathJax = {
     return CS.tuneCache[key];
   }
   // Configuration of one method under the active preset: { hp, a }, with a the long-run assessment
-  // of GDCore.assess (null for SGD: with a constant eta its noise never lets it settle).
+  // of GDCore.assess (null for SGD: with a constant eta the mini-batch gradients never let it settle).
   function config(kind) {
     if (kind === "sgd") return { hp: Object.assign({ eta: CS.etaSgd }, hpBase(kind)), a: null };
     if (CS.preset === "all" || CS.preset === "tuned") return tuned(kind, CS.preset === "all");
@@ -1396,6 +1473,7 @@ window.MathJax = {
     if ("mu" in hp) parts.push("μ = " + hp.mu);
     if ("rho" in hp) parts.push("ρ = " + hp.rho);
     if ("b1" in hp) parts.push("β₁ = " + hp.b1, "β₂ = " + hp.b2);
+    if ("batch" in hp) parts.push("B = " + hp.batch + " of " + C.M_SAMPLES);
     if ("sigma" in hp) parts.push("σ = " + hp.sigma);
     return parts;
   }
@@ -1470,7 +1548,7 @@ window.MathJax = {
   // ---------------------------------------------------------------- table, legend, notes
   function reachCell(kind, r) {
     const a = r.a;
-    if (kind === "sgd") return r.status === "out" ? "leaves the domain<br>at step " + (r.n + 1) : "does not stay<br>(noise)";
+    if (kind === "sgd") return r.status === "out" ? "leaves the domain<br>at step " + (r.n + 1) : "does not stay<br>(sample noise)";
     if (a.status === "stays") return String(a.settle);
     if (a.status === "out") return "leaves the domain<br>at step " + a.step;
     if (a.status === "leaves") return "does not stay<br><small>arrives at " + a.arrive + ",<br>moves away at " + a.leave + "</small>";
@@ -1749,6 +1827,7 @@ window.MathJax = {
   for (const [id, key] of [["hpMu", "mu"], ["hpRho", "rho"], ["hpB1", "b1"], ["hpB2", "b2"], ["hpSigma", "sigma"]]) {
     $(id).addEventListener("change", (ev) => { const v = Number(ev.target.value); if (Number.isFinite(v) && v >= 0) { CS.hp[key] = v; recompute(true); } });
   }
+  $("hpBatch").addEventListener("change", (ev) => { const v = Math.round(Number(ev.target.value)); if (v >= 1 && v <= C.M_SAMPLES) { CS.hp.batch = v; recompute(true); } });
   $("hpEtaSgd").addEventListener("change", (ev) => { const v = Number(ev.target.value); if (v > 0) { CS.etaSgd = v; recompute(true); } });
   $("cmpMap").addEventListener("click", (ev) => {
     if (!MAPC) return;
